@@ -24,6 +24,15 @@
 
       <sc-if value="{{ed.hasForm}}" hint-placeholder-val="{{true}}">
         <div class="ap-lbl">{{ed.formTitle}}</div>
+        <sc-if value="{{ed.hasNote}}" hint-placeholder-val="{{false}}"><div class="ed-note">{{ed.note}}</div></sc-if>
+        <sc-if value="{{ed.hasQr}}" hint-placeholder-val="{{false}}">
+          <div class="qr-box">
+            <img src="{{ed.qr}}" alt="Código QR para la app autenticadora" width="168" height="168">
+            <div style="font-size: 12.5px; color: var(--apmut); margin-top: 10px">¿Estás en este mismo teléfono? Usa el botón o copia la clave:</div>
+            <div class="qr-secret">{{ed.secret}}</div>
+            <div style="display: flex; gap: 8px; width: 100%"><a class="ap-alt" style="margin-top: 0; display: flex; align-items: center; justify-content: center; text-decoration: none" href="{{ed.otpUri}}">Abrir autenticador</a><button class="ap-alt" style="margin-top: 0" onClick="{{ed.copySecret}}">{{ed.copyTxt}}</button></div>
+          </div>
+        </sc-if>
         <sc-for list="{{ed.fields}}" as="fd" hint-placeholder-count="3">
           <div>
             <label class="ap-fl" for="{{fd.id}}">{{fd.label}}</label>
@@ -36,9 +45,12 @@
             <sc-if value="{{fd.hasHint}}" hint-placeholder-val="{{false}}"><div style="font-size: 12px; color: var(--apmut); margin-top: 5px">{{fd.hint}}</div></sc-if>
           </div>
         </sc-for>
+        <sc-if value="{{ed.hasMeter}}" hint-placeholder-val="{{false}}"><div class="pw-meter"><span style="width: {{ed.meterW}}%; background: {{ed.meterC}}"></span></div><div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">{{ed.meterTxt}}</div></sc-if>
+        <sc-if value="{{ed.hasOk}}" hint-placeholder-val="{{false}}"><div class="ap-ok">{{ed.ok}}</div></sc-if>
         <sc-if value="{{ed.hasErr}}" hint-placeholder-val="{{false}}"><div class="ap-err">{{ed.err}}</div></sc-if>
         <button class="{{ed.saveCls}}" onClick="{{ed.save}}">{{ed.saveTxt}}</button>
         <sc-if value="{{ed.hasAlt}}" hint-placeholder-val="{{false}}"><button class="ap-alt" onClick="{{ed.alt}}">{{ed.altTxt}}</button></sc-if>
+        <sc-if value="{{ed.hasAlt2}}" hint-placeholder-val="{{false}}"><button class="ap-alt danger-t" onClick="{{ed.alt2}}">{{ed.alt2Txt}}</button></sc-if>
         <sc-if value="{{ed.hasCancelEdit}}" hint-placeholder-val="{{false}}"><button class="ap-alt" onClick="{{ed.cancelEdit}}">Cancelar edición</button></sc-if>
       </sc-if>
 
@@ -48,10 +60,11 @@
           <div style="font-size: 12.5px; color: var(--apmut); margin-top: 4px; line-height: 1.45">{{sync.txt}}</div>
           <sc-if value="{{sync.logged}}" hint-placeholder-val="{{false}}">
             <div style="display: flex; gap: 8px; margin-top: 12px"><button class="ap-alt" style="margin-top: 0" onClick="{{syncNow}}">Sincronizar ahora</button><button class="ap-alt" style="margin-top: 0" onClick="{{logout}}">Cerrar sesión</button></div>
+            <button class="ap-alt" onClick="{{logoutAll}}">Cerrar sesión en todos mis dispositivos</button>
           </sc-if>
         </div>
         <div class="ap-lbl">Copia de seguridad</div>
-        <div style="font-size: 12.5px; color: var(--apmut); line-height: 1.45">Descarga un archivo con todos tus datos o recupéralos desde uno.</div>
+        <div style="font-size: 12.5px; color: var(--apmut); line-height: 1.45">Descarga un archivo con todos tus datos o recupéralos desde uno. El archivo no va cifrado: guárdalo en un lugar seguro.</div>
         <div style="display: flex; gap: 8px; margin-top: 10px">
           <button class="ap-alt" style="margin-top: 0" onClick="{{exportData}}">Exportar (.json)</button>
           <label class="ap-alt" style="margin-top: 0; display: flex; align-items: center; justify-content: center; cursor: pointer">Importar<input type="file" accept="application/json,.json" style="display: none" onChange="{{importData}}"></label>
@@ -76,5 +89,18 @@
       <div style="grid-column: 1 / -1"><div style="color: var(--apmut)">Asociado a</div><b>{{movD.dest}}</b></div>
     </div>
     <button class="{{movD.delCls}}" onClick="{{movD.del}}">{{movD.delTxt}}</button>
+  </div>
+</sc-if>
+
+<sc-if value="{{lockOn}}" hint-placeholder-val="{{false}}">
+  <div class="lk" role="dialog" aria-label="Desbloquear Mis Finanzas">
+    <div class="lk-logo"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="3"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></div>
+    <div style="font-family: 'Sora', sans-serif; font-size: 22px; font-weight: 600; margin-top: 16px">{{lk.title}}</div>
+    <div class="lk-msg {{lk.msgCls}}">{{lk.msg}}</div>
+    <div class="lk-dots"><sc-for list="{{lk.dots}}" as="dt" hint-placeholder-count="6"><span class="lk-dot {{dt.cls}}"></span></sc-for></div>
+    <div class="lk-pad">
+      <sc-for list="{{lk.keys}}" as="ky" hint-placeholder-count="12"><button class="lk-key {{ky.cls}}" onClick="{{ky.press}}" aria-label="{{ky.aria}}">{{ky.label}}</button></sc-for>
+    </div>
+    <sc-if value="{{lk.hasBio}}" hint-placeholder-val="{{false}}"><button class="lk-bio" onClick="{{lk.bio}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 11v3M8.5 8.5A5 5 0 0 1 17 12v1M7 12a5 5 0 0 0 .5 2.2M12 5a7 7 0 0 1 7 7v1M5 12a7 7 0 0 1 3-5.7M9.5 18a8 8 0 0 0 1.5-4M14.5 17.5a11 11 0 0 0 .5-3.5"></path></svg>Usar huella / Face ID</button></sc-if>
   </div>
 </sc-if>

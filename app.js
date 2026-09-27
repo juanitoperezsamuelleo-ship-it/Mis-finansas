@@ -1,6 +1,8 @@
 import { h, render, Component } from './vendor/preact.mjs';
 import htm from './vendor/htm.mjs';
 import view from './view.js';
+import { lock, passCheck } from './security.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 const html = htm.bind(h);
 
 /* ============ utilidades ============ */
@@ -28,7 +30,13 @@ function nextDayOfMonth(day, from) {
 }
 
 /* ============ datos ============ */
-const KEY = 'mf-data-v1', CLOUD = 'mf-cloud-v1';
+const KEY = 'mf-data-v1', CLOUD = 'mf-cloud-v1', USER_DOMAIN = '@usuarios.misfinanzas.app';
+const userOf = (email) => (email || '').replace(USER_DOMAIN, '');
+const qk = (fecha) => fecha.slice(0, 7) + '-' + (+fecha.slice(8, 10) > 15 ? 2 : 1);
+const qBounds = (k) => { const [y, m, h] = k.split('-').map(Number); return h === 1 ? [new Date(y, m - 1, 1), new Date(y, m - 1, 15)] : [new Date(y, m - 1, 16), new Date(y, m - 1, lastDay(y, m - 1))]; };
+const qLabel = (k) => { const [a, b] = qBounds(k); return a.getDate() + '–' + b.getDate() + ' ' + MES[a.getMonth()]; };
+const qPrev = (k) => { const [y, m, h] = k.split('-').map(Number); if (h === 2) return y + '-' + pad(m) + '-1'; const pm = m === 1 ? 12 : m - 1, py = m === 1 ? y - 1 : y; return py + '-' + pad(pm) + '-2'; };
+const ISUB = { salario: 'Salario', extra: 'Extras y recargos', otro: 'Otros ingresos' };
 function blank() {
   return { v: 1, updatedAt: 0, perfil: { nombre: '', ingresoQuincena: 0 }, movs: [], tarjetas: [], vehiculos: [], cerditos: [], creditos: [], plan: 'bal', prefs: { look: null, theme: 'auto' }, onboarded: false };
 }
@@ -45,9 +53,10 @@ function saveLocal(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } ca
 function loadCloudCfg() { try { return JSON.parse(localStorage.getItem(CLOUD)) || null; } catch (e) { return null; } }
 
 const ADDS = ['Diario', 'Tarjeta', 'Vehículo', 'Hogar', 'Cerdito', 'Ingreso', 'Pago tarjeta'];
+const ISUB_OPTS = [{ id: 'salario', nombre: 'Salario' }, { id: 'extra', nombre: 'Extras y recargos' }, { id: 'otro', nombre: 'Otros' }];
 const ADD_MAP = [
   { tipo: 'gasto', cat: 'diario' }, { tipo: 'gasto', cat: 'tarjeta', need: 'tarjetas' }, { tipo: 'gasto', cat: 'vehiculo', need: 'vehiculos', optional: true },
-  { tipo: 'gasto', cat: 'hogar' }, { tipo: 'aporte', cat: 'cerdito', need: 'cerditos' }, { tipo: 'ingreso', cat: 'ingreso' }, { tipo: 'pagoTarjeta', cat: 'tarjeta', need: 'tarjetas' }
+  { tipo: 'gasto', cat: 'hogar' }, { tipo: 'aporte', cat: 'cerdito', need: 'cerditos' }, { tipo: 'ingreso', cat: 'ingreso', need: 'isub' }, { tipo: 'pagoTarjeta', cat: 'tarjeta', need: 'tarjetas' }
 ];
 const CAT_IDX = { diario: 0, tarjeta: 1, vehiculo: 2, hogar: 3 };
 const CAT_NAME = { diario: 'Diario', tarjeta: 'Tarjeta', vehiculo: 'Vehículo', hogar: 'Hogar', cerdito: 'Cerdito', ingreso: 'Ingreso' };
@@ -105,15 +114,16 @@ function simExtra(calc, extra) {
 class App extends Component {
   constructor() {
     super();
-    const data = loadLocal();
-    this.cloud = loadCloudCfg();
+    const locked = lock.enabled();
+    const data = locked ? blank() : loadLocal();
+    this.cloud = SUPABASE_URL && SUPABASE_ANON_KEY ? { url: SUPABASE_URL, key: SUPABASE_ANON_KEY, builtin: true } : loadCloudCfg();
     this.state = {
-      data, splash: 'in', tab: 'inicio', sub: 'diario', period: 'q', shown: 0, sysDark: this.sysDark(),
+      data, locked, lockPin: '', lockMsg: '', lockErr: false, splash: locked ? false : 'in', tab: 'inicio', sub: 'diario', period: 'q', shown: 0, sysDark: this.sysDark(),
       sheet: false, addCat: 0, mv: { monto: '', nota: '' }, mvTarget: null, mvErr: '', toast: false,
       panel: false, welcome: false, morph: null, cred: false, cf: this.emptyCf(), asist: false, asistStep: 0,
-      ed: null, movSel: null, movConfirm: false, vehSel: 0,
+      ed: null, movSel: null, movConfirm: false, vehSel: 0, copied: false,
       sync: { status: this.cloud ? 'idle' : 'off', last: 0, email: '', msg: '' },
-      cloudForm: { url: (this.cloud && this.cloud.url) || '', key: (this.cloud && this.cloud.key) || '', email: '', password: '', modo: 'entrar' }
+      cloudForm: { url: (this.cloud && !this.cloud.builtin && this.cloud.url) || '', key: (this.cloud && !this.cloud.builtin && this.cloud.key) || '', user: '', password: '', password2: '', code: '', modo: 'entrar' }
     };
   }
   /* ---------- ciclo de vida ---------- */
@@ -121,13 +131,57 @@ class App extends Component {
   componentDidMount() {
     try { this.mq = matchMedia('(prefers-color-scheme: dark)'); this.mq.addEventListener('change', (e) => this.setState({ sysDark: e.matches })); } catch (e) {}
     addEventListener('online', () => this.schedulePush(200));
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.pull(); });
-    this.initCloud();
-    this.boot();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') { this.hiddenAt = Date.now(); return; }
+      if (lock.enabled() && this.dek && !this.state.locked && Date.now() - (this.hiddenAt || Date.now()) > 60000) return this.relock();
+      if (!this.state.locked) this.pull();
+    });
+    if (this.state.locked) this.lockPrompt(); else { this.initCloud(); this.boot(); }
+  }
+  /* ---------- bloqueo ---------- */
+  lockPrompt() {
+    const w = lock.waitMs();
+    this.setState({ lockMsg: w > 0 ? 'Demasiados intentos. Espera ' + Math.ceil(w / 1000) + ' s.' : 'Ingresa tu PIN de 6 dígitos', lockErr: w > 0 });
+    if (lock.hasBio() && !this.bioTried) { this.bioTried = true; setTimeout(() => this.unlockBio(), 350); }
+  }
+  relock() {
+    this.dek = null; clearTimeout(this.tp);
+    this.setState({ locked: true, data: blank(), lockPin: '', sheet: false, panel: false, ed: null, asist: false, cred: false, movSel: null, splash: false });
+    this.bioTried = false; this.lockPrompt();
+  }
+  afterUnlock(res) {
+    this.dek = res.dek;
+    const first = !this.booted;
+    this.setState({ data: normalize(res.data), locked: false, lockPin: '', lockMsg: '', lockErr: false, splash: first ? 'in' : false, shown: 0 }, () => {
+      if (first) { this.initCloud(); this.boot(); } else { this.countTo(this.per().total, 0); this.pull(); }
+    });
+  }
+  async pressKey(k) {
+    const s = this.state; if (this.unlocking) return;
+    if (k === 'del') return this.setState({ lockPin: s.lockPin.slice(0, -1), lockErr: false });
+    if (s.lockPin.length >= 6) return;
+    const pin = s.lockPin + k; this.setState({ lockPin: pin, lockErr: false });
+    if (pin.length < 6) return;
+    if (lock.waitMs() > 0) { this.setState({ lockPin: '' }); return this.lockPrompt(); }
+    this.unlocking = true; this.setState({ lockMsg: 'Verificando…' });
+    try { const res = await lock.unlockPin(pin); this.unlocking = false; this.afterUnlock(res); }
+    catch (e) {
+      this.unlocking = false; const n = lock.fails(), w = lock.waitMs();
+      this.setState({ lockPin: '', lockErr: true, lockMsg: w > 0 ? 'Demasiados intentos. Espera ' + Math.ceil(w / 1000) + ' s.' : 'PIN incorrecto' + (n >= 3 ? ' · intento ' + n : '') });
+    }
+  }
+  async unlockBio() {
+    try { const res = await lock.unlockBio(); this.afterUnlock(res); }
+    catch (e) { if (this.state.locked) this.setState({ lockMsg: 'Usa tu PIN de 6 dígitos', lockErr: false }); }
+  }
+  persist(d) {
+    if (this.dek) lock.save(this.dek, d).catch(() => {});
+    else if (!lock.enabled()) saveLocal(d);
   }
   look() { return CFG[this.state.data.prefs.look] ? this.state.data.prefs.look : 'nb'; }
   isDark() { const t = this.state.data.prefs.theme; return t === 'dark' || (t === 'auto' && this.state.sysDark); }
   boot() {
+    this.booted = true;
     const c = CFG[this.look()];
     clearTimeout(this.t1); clearTimeout(this.t2);
     this.t1 = setTimeout(() => this.setState({ splash: 'out' }), c.splash[0]);
@@ -155,7 +209,7 @@ class App extends Component {
     const d = JSON.parse(JSON.stringify(this.state.data));
     fn(d);
     d.updatedAt = Date.now();
-    saveLocal(d);
+    this.persist(d);
     this.setState({ data: d }, () => { if (opts && opts.recount) this.countTo(this.per().total, this.state.shown); });
     this.schedulePush();
   }
@@ -182,23 +236,34 @@ class App extends Component {
     const isG = (x) => x.tipo === 'gasto';
     const total = this.sumRange(movs, b.from, b.to, isG), prev = this.sumRange(movs, b.pf, b.pt, isG);
     const cats = ['diario', 'tarjeta', 'vehiculo', 'hogar'].map((c) => this.sumRange(movs, b.from, b.to, (x) => isG(x) && x.cat === c));
-    const ingreso = D.perfil.ingresoQuincena * b.nQ + this.sumRange(movs, b.from, b.to, (x) => x.tipo === 'ingreso');
+    const inc = this.ingresoRange(b.from, kind === 'a' ? now : b.to), ingreso = inc.total;
     const y = now.getFullYear(), m = now.getMonth(), pm = m === 0 ? 11 : m - 1;
     const L = {
       q: { label: 'Esta quincena', range: b.from.getDate() + ' – ' + b.to.getDate() + ' ' + MES[m], lead: 'esta quincena', vs: 'vs quincena anterior', vsLong: 'que la quincena pasada' },
       m: { label: cap(MESL[m]), range: '1 – ' + b.to.getDate() + ' ' + MES[m], lead: 'en ' + MESL[m], vs: 'vs ' + MESL[pm], vsLong: 'que en ' + MESL[pm] },
       a: { label: 'Año ' + y, range: 'ene – ' + MES[m], lead: 'en lo que va de ' + y, vs: 'vs mismo corte ' + (y - 1), vsLong: 'que al mismo corte de ' + (y - 1) }
     }[kind];
-    return Object.assign(L, { total, prev, cats, ingreso, from: b.from, to: b.to });
+    return Object.assign(L, { total, prev, cats, ingreso, ingresoEst: inc.est, from: b.from, to: b.to });
   }
 
+  qIncome(k) {
+    const D = this.state.data, by = { salario: 0, extra: 0, otro: 0 };
+    for (const x of D.movs) if (x.tipo === 'ingreso' && qk(x.fecha) === k) by[x.sub && by[x.sub] !== undefined ? x.sub : 'otro'] += x.monto;
+    const est = by.salario <= 0 && D.perfil.ingresoQuincena > 0;
+    return { by, est, total: (by.salario > 0 ? by.salario : D.perfil.ingresoQuincena) + by.extra + by.otro };
+  }
+  ingresoRange(from, to) {
+    let k = qk(iso(to)), end = qk(iso(from)), total = 0, est = false, guard = 0;
+    while (guard++ < 60) { const q = this.qIncome(k); total += q.total; est = est || q.est; if (k === end) break; k = qPrev(k); }
+    return { total, est };
+  }
   /* ---------- movimientos ---------- */
   itemOf(x, c) {
     const D = this.state.data, name = (arr, id) => { const o = arr.find((z) => z.id === id); return o ? o.nombre : '(eliminado)'; };
     let t = x.nota, dest = '';
     if (x.tipo === 'aporte') { dest = name(D.cerditos, x.cerditoId); t = t || 'Aporte a ' + dest; }
     else if (x.tipo === 'pagoTarjeta') { dest = name(D.tarjetas, x.tarjetaId); t = t || 'Pago de ' + dest; }
-    else if (x.tipo === 'ingreso') t = t || 'Ingreso';
+    else if (x.tipo === 'ingreso') { t = t || ISUB[x.sub] || 'Ingreso'; dest = ISUB[x.sub] || 'Otros ingresos'; }
     else {
       if (x.tarjetaId) dest = name(D.tarjetas, x.tarjetaId);
       if (x.vehiculoId) dest = name(D.vehiculos, x.vehiculoId);
@@ -217,13 +282,14 @@ class App extends Component {
   saveMov() {
     const s = this.state, map = ADD_MAP[s.addCat], monto = num(s.mv.monto), D = s.data;
     if (!(monto > 0)) return this.setState({ mvErr: 'Escribe el monto.' });
-    const opts = map.need ? D[map.need] : [];
+    const opts = map.need === 'isub' ? ISUB_OPTS : (map.need ? D[map.need] : []);
     let target = s.mvTarget && opts.some((o) => o.id === s.mvTarget) ? s.mvTarget : (opts[0] && opts[0].id);
     if (map.need && !map.optional && !target) return this.setState({ mvErr: { tarjetas: 'Primero agrega una tarjeta en Ajustes → Tarjetas.', cerditos: 'Primero crea un cerdito en Ajustes → Cerditos.' }[map.need] });
     const mov = { id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: map.tipo, cat: map.cat, monto, nota: s.mv.nota.trim() };
     if (map.need === 'tarjetas') mov.tarjetaId = target;
     if (map.need === 'vehiculos' && target) mov.vehiculoId = target;
     if (map.need === 'cerditos') mov.cerditoId = target;
+    if (map.need === 'isub') mov.sub = target || 'extra';
     this.setState({ sheet: false, mv: { monto: '', nota: '' }, mvErr: '' });
     this.mut((d) => d.movs.push(mov), { recount: true });
     this.toast();
@@ -239,9 +305,11 @@ class App extends Component {
       tarjetas: { nombre: '', ult4: '', cupo: '', usadoInicial: '', corte: '', pago: '' },
       vehiculos: { nombre: '', tipo: 'moto', km: '', aceiteKm: '', aceiteCada: '', soat: '' },
       cerditos: { nombre: '', meta: '', inicial: '', fecha: '' },
-      creditos: {}, datos: {}
+      creditos: {}, datos: {}, seguridad: { pin: '', pin2: '', pinOld: '' },
+      ingresos: this.incForm(qk(iso(new Date())))
     }[kind];
   }
+  incForm(k) { const q = this.qIncome(k), S = (x) => (x > 0 ? String(x) : ''); return { q: k, salario: S(q.by.salario), extra: S(q.by.extra), otro: S(q.by.otro) }; }
   setEdF(k, v) { const ed = this.state.ed; this.setState({ ed: Object.assign({}, ed, { form: Object.assign({}, ed.form, { [k]: v }), err: '' }) }); }
   edSave() {
     const ed = this.state.ed, f = ed.form, k = ed.kind;
@@ -249,10 +317,24 @@ class App extends Component {
     if (k === 'perfil') {
       if (!f.nombre.trim()) return err('Escribe tu nombre.');
       this.mut((d) => { d.perfil.nombre = f.nombre.trim(); d.perfil.ingresoQuincena = num(f.ingresoQuincena); }, { recount: true });
-      if (ed.welcome) return this.openEd('datos', { welcome: true });
+      if (ed.welcome) return this.openEd('seguridad', { welcome: true });
       return this.setState({ ed: null });
     }
     if (k === 'creditos') return this.setState({ ed: null, cred: true });
+    if (k === 'ingresos') {
+      const key = f.q, [from] = qBounds(key), cur = this.qIncome(key).by;
+      const today = new Date(), fecha = qk(iso(today)) === key ? iso(today) : iso(from);
+      const nv = { salario: num(f.salario), extra: num(f.extra), otro: num(f.otro) };
+      this.mut((d) => {
+        for (const sub of ['salario', 'extra', 'otro']) {
+          if (nv[sub] === cur[sub]) continue;
+          d.movs = d.movs.filter((x) => !(x.tipo === 'ingreso' && qk(x.fecha) === key && (x.sub || 'otro') === sub));
+          if (nv[sub] > 0) d.movs.push({ id: uid(), fecha, ts: Date.now(), tipo: 'ingreso', cat: 'ingreso', sub, monto: nv[sub], nota: ISUB[sub] + ' ' + qLabel(key) });
+        }
+      }, { recount: true });
+      return this.setState({ ed: Object.assign({}, ed, { err: '', ok: 'Guardado: ' + qLabel(key) + ' = ' + fmt((nv.salario || 0) + nv.extra + nv.otro) }) });
+    }
+    if (k === 'seguridad') return this.secSave();
     if (k === 'datos') return this.cloudSubmit();
     let item;
     if (k === 'tarjetas') {
@@ -290,27 +372,87 @@ class App extends Component {
     this.mut((d) => { d[ed.kind] = d[ed.kind].filter((o) => o.id !== id); }, { recount: true });
     this.setState({ ed: Object.assign({}, this.state.ed, { confirm: null, editId: ed.editId === id ? null : ed.editId }) });
   }
+  async secSave() {
+    const ed = this.state.ed, f = ed.form, err = (m) => this.setState({ ed: Object.assign({}, this.state.ed, { err: m, ok: '', busy: false }) });
+    const six = (p) => /^\d{6}$/.test(p);
+    if (!lock.enabled()) {
+      if (!six(f.pin)) return err('El PIN debe tener exactamente 6 números.');
+      if (/^(\d)\1{5}$/.test(f.pin) || '0123456789'.includes(f.pin) || '9876543210'.includes(f.pin)) return err('Ese PIN es muy fácil de adivinar. Evita repetidos y secuencias.');
+      if (f.pin !== f.pin2) return err('Los PIN no coinciden.');
+      this.setState({ ed: Object.assign({}, ed, { busy: true, err: '' }) });
+      this.dek = await lock.enable(f.pin, this.state.data);
+      try { localStorage.removeItem(KEY); } catch (e) {}
+      this.lastPin = f.pin;
+      const bio = await lock.bioSupported();
+      return this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, form: { pin: '', pin2: '', pinOld: '' }, ok: 'Bloqueo activado. Tus datos quedaron cifrados en este teléfono.' + (bio ? ' Ya puedes activar huella / Face ID.' : ''), bioOk: bio }) });
+    }
+    if (!six(f.pinOld)) return err('Escribe tu PIN actual.');
+    if (!six(f.pin) || f.pin !== f.pin2) return err('Escribe el PIN nuevo dos veces (6 números).');
+    this.setState({ ed: Object.assign({}, ed, { busy: true, err: '' }) });
+    try { await lock.changePin(f.pinOld, f.pin); this.lastPin = f.pin; this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, form: { pin: '', pin2: '', pinOld: '' }, ok: 'PIN cambiado.' }) }); }
+    catch (e) { err('El PIN actual no es correcto.'); }
+  }
+  async secBio() {
+    const ed = this.state.ed, err = (m) => this.setState({ ed: Object.assign({}, this.state.ed, { err: m, ok: '' }) });
+    if (lock.hasBio()) { lock.disableBio(); return this.setState({ ed: Object.assign({}, ed, { ok: 'Huella / Face ID desactivado.', err: '' }) }); }
+    const pin = this.lastPin || ed.form.pinOld;
+    if (!/^\d{6}$/.test(pin || '')) return err('Escribe tu PIN actual arriba y vuelve a tocar este botón.');
+    try { await lock.enableBio(pin); this.setState({ ed: Object.assign({}, this.state.ed, { ok: 'Listo: podrás abrir la app con huella / Face ID.', err: '' }) }); }
+    catch (e) { err(e && e.message === 'noprf' ? 'Este teléfono o navegador no permite desbloquear datos cifrados con huella. Seguirás usando el PIN.' : 'No se pudo activar la huella / Face ID. Intenta de nuevo.'); }
+  }
+  async secDisable() {
+    const ed = this.state.ed, pin = ed.form.pinOld;
+    if (!ed.confirmOff) return this.setState({ ed: Object.assign({}, ed, { confirmOff: true, err: 'Escribe tu PIN actual y toca de nuevo "Quitar bloqueo". Tus datos quedarán sin cifrar en el teléfono.' }) });
+    try { const data = await lock.disable(pin); this.dek = null; saveLocal(normalize(data)); this.setState({ ed: Object.assign({}, this.state.ed, { confirmOff: false, err: '', ok: 'Bloqueo desactivado.' }) }); }
+    catch (e) { this.setState({ ed: Object.assign({}, this.state.ed, { err: 'PIN incorrecto.' }) }); }
+  }
   closeEd() {
     const ed = this.state.ed;
     this.setState({ ed: null });
     if (ed && ed.welcome) this.finishWelcome();
   }
+  secNext() { const ed = this.state.ed; if (ed && ed.welcome && ed.kind === 'seguridad') return this.openEd('datos', { welcome: true }); this.setState({ ed: null }); }
   finishWelcome() {
     if (!this.state.data.onboarded) { this.mut((d) => { d.onboarded = true; }); this.setState({ ed: null, panel: true, welcome: true }); }
+    else this.setState({ ed: null });
   }
 
   /* ---------- nube (Supabase) ---------- */
   initCloud() {
-    if (!this.cloud || !window.supabase) return;
+    if (!this.cloud || !window.supabase || this.sb) return;
     try {
       this.sb = window.supabase.createClient(this.cloud.url, this.cloud.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'mf-auth' } });
-    } catch (e) { this.setSync({ status: 'err', msg: 'La URL o la clave de Supabase no son válidas.' }); return; }
-    this.sb.auth.onAuthStateChange((_ev, session) => { this.session = session; this.setSync({ email: session ? session.user.email : '', status: session ? this.state.sync.status : 'idle' }); });
-    this.sb.auth.getSession().then(({ data }) => { this.session = data.session; if (this.session) { this.setSync({ email: this.session.user.email }); this.pull(); } else this.setSync({ status: 'idle' }); });
+    } catch (e) { this.sb = null; this.setSync({ status: 'err', msg: 'La URL o la clave de Supabase no son válidas.' }); return; }
+    this.sb.auth.onAuthStateChange((ev, session) => { this.session = session; if (!session) { this.aal2 = false; this.mfaNeed = null; this.setSync({ status: 'idle', email: '' }); } });
+    this.sb.auth.getSession().then(async ({ data }) => {
+      this.session = data.session;
+      if (!this.session) return this.setSync({ status: 'idle' });
+      this.setSync({ email: this.session.user.email });
+      try { if (await this.checkMfa()) this.pull(); } catch (e) { this.setSync({ status: 'err', msg: this.errTxt(e) }); }
+    });
   }
   setSync(o) { this.setState({ sync: Object.assign({}, this.state.sync, o) }); }
+  async checkMfa() {
+    const a = await this.sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (a.error) throw a.error;
+    if (a.data.currentLevel === 'aal2') { this.aal2 = true; this.mfaNeed = null; this.forceUpdate(); return true; }
+    this.aal2 = false;
+    const lf = await this.sb.auth.mfa.listFactors(); if (lf.error) throw lf.error;
+    const ok = (lf.data.totp || []).find((x) => x.status === 'verified');
+    if (ok) { this.mfaNeed = 'verify'; this.factorId = ok.id; }
+    else {
+      for (const x of (lf.data.all || []).filter((x) => x.status !== 'verified')) await this.sb.auth.mfa.unenroll({ factorId: x.id });
+      const e = await this.sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Mis Finanzas ' + new Date().toISOString().slice(0, 16) });
+      if (e.error) throw e.error;
+      this.mfaNeed = 'enroll'; this.factorId = e.data.id;
+      this.enrollInfo = { qr: e.data.totp.qr_code, secret: e.data.totp.secret, uri: e.data.totp.uri };
+    }
+    this.setSync({ status: 'idle' });
+    return false;
+  }
+  canSync() { return !!(this.sb && this.session && this.aal2 && !this.state.locked); }
   async pull() {
-    if (!this.sb || !this.session) return;
+    if (!this.canSync()) return;
     if (!navigator.onLine) return this.setSync({ status: 'offline' });
     this.setSync({ status: 'busy' });
     const { data: row, error } = await this.sb.from('finanzas').select('data, updated_at').eq('user_id', this.session.user.id).maybeSingle();
@@ -318,15 +460,15 @@ class App extends Component {
     const local = this.state.data;
     if (row && new Date(row.updated_at).getTime() > (local.updatedAt || 0)) {
       const d = normalize(row.data); d.updatedAt = new Date(row.updated_at).getTime();
-      saveLocal(d); this.setState({ data: d }, () => this.countTo(this.per().total, 0));
+      this.persist(d); this.setState({ data: d }, () => this.countTo(this.per().total, 0));
       this.setSync({ status: 'ok', last: Date.now(), msg: '' });
     } else if (!row || (local.updatedAt || 0) > new Date(row.updated_at).getTime()) {
       await this.push();
     } else this.setSync({ status: 'ok', last: Date.now(), msg: '' });
   }
-  schedulePush(ms) { clearTimeout(this.tp); if (this.sb && this.session) this.tp = setTimeout(() => this.push(), ms || 1200); }
+  schedulePush(ms) { clearTimeout(this.tp); if (this.canSync()) this.tp = setTimeout(() => this.push(), ms || 1200); }
   async push() {
-    if (!this.sb || !this.session) return;
+    if (!this.canSync()) return;
     if (!navigator.onLine) return this.setSync({ status: 'offline' });
     this.setSync({ status: 'busy' });
     const d = this.state.data;
@@ -336,41 +478,86 @@ class App extends Component {
   }
   errTxt(e) {
     const m = (e && e.message) || String(e);
-    if (/relation .*finanzas.* does not exist|Could not find the table/i.test(m)) return 'Falta crear la tabla: ejecuta el script supabase.sql en el SQL Editor.';
-    if (/Invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos.';
-    if (/Email not confirmed/i.test(m)) return 'Confirma tu correo (revisa tu bandeja) y vuelve a entrar.';
-    if (/Failed to fetch|NetworkError/i.test(m)) return 'No hay conexión con Supabase. Revisa la URL o tu internet.';
-    if (/already registered/i.test(m)) return 'Ese correo ya tiene cuenta: elige "Entrar".';
+    if (/relation .*finanzas.* does not exist|Could not find the table/i.test(m)) return 'Falta crear la tabla en Supabase (script supabase.sql).';
+    if (/Invalid login credentials/i.test(m)) return 'Usuario o contraseña incorrectos.';
+    if (/Email not confirmed/i.test(m)) return 'La cuenta existe pero Supabase exige confirmar correo: desactiva "Confirm email" en Authentication → Providers → Email.';
+    if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sin conexión con la nube. Revisa tu internet.';
+    if (/already registered|already exists/i.test(m)) return 'Ese usuario ya existe: elige "Entrar".';
+    if (/Invalid TOTP|invalid.*code|expired/i.test(m)) return 'Código incorrecto o vencido. Escribe el código actual de tu app autenticadora.';
+    if (/rate limit|too many/i.test(m)) return 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.';
+    if (/row-level security|permission denied/i.test(m)) return 'Acceso denegado: verifica tu código de dos pasos.';
+    if (/mfa.*disabled|MFA enroll is disabled/i.test(m)) return 'La verificación en dos pasos está desactivada en Supabase (Authentication → Multi-Factor).';
     return m;
   }
+  cloudErr(m) { this.setState({ ed: Object.assign({}, this.state.ed, { err: m, busy: false, ok: '' }) }); }
   async cloudSubmit() {
-    const f = this.state.cloudForm, ed = this.state.ed;
-    const err = (m) => this.setState({ ed: Object.assign({}, this.state.ed, { err: m }) });
-    if (!this.sb) {
+    const f = this.state.cloudForm, stage = this.authStage();
+    const err = (m) => this.cloudErr(m);
+    if (stage === 'config') {
       const url = f.url.trim().replace(/\/+$/, ''), key = f.key.trim();
       if (!/^https:\/\/.+/.test(url)) return err('Pega la Project URL (empieza por https://).');
       if (key.length < 20) return err('Pega la clave anon / publishable.');
       if (!window.supabase) return err('No se pudo cargar el cliente de Supabase. Revisa tu conexión.');
       this.cloud = { url, key };
       try { localStorage.setItem(CLOUD, JSON.stringify(this.cloud)); } catch (e) {}
-      this.initCloud();
+      this.initCloud(); return this.forceUpdate();
     }
-    if (!/.+@.+\..+/.test(f.email)) return err('Escribe tu correo.');
-    if (f.password.length < 6) return err('La contraseña debe tener al menos 6 caracteres.');
-    this.setState({ ed: Object.assign({}, ed, { err: '', busy: true }) });
-    const res = f.modo === 'crear' ? await this.sb.auth.signUp({ email: f.email.trim(), password: f.password })
-      : await this.sb.auth.signInWithPassword({ email: f.email.trim(), password: f.password });
-    this.setState({ ed: Object.assign({}, this.state.ed, { busy: false }) });
-    if (res.error) return err(this.errTxt(res.error));
-    if (!res.data.session) return err('Te enviamos un correo para confirmar la cuenta. Confírmala y luego entra aquí con "Entrar".');
-    this.session = res.data.session;
-    this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { password: '' }) });
-    this.setSync({ email: this.session.user.email });
+    this.setState({ ed: Object.assign({}, this.state.ed, { err: '', busy: true }) });
+    try {
+      if (stage === 'login') {
+        const u = f.user.trim().toLowerCase();
+        if (!/^[a-z0-9._-]{3,30}$/.test(u)) return err('Usuario de 3 a 30 caracteres: letras, números, punto, guion o guion bajo.');
+        const email = u + USER_DOMAIN;
+        if (f.modo === 'crear') {
+          const pc = passCheck(f.password, u);
+          if (!pc.ok) return err('La contraseña necesita ' + pc.missing.join(', ') + '.');
+          if (f.password !== f.password2) return err('Las contraseñas no coinciden.');
+          const res = await this.sb.auth.signUp({ email, password: f.password });
+          if (res.error) return err(this.errTxt(res.error));
+          if (!res.data.session) return err('La cuenta se creó, pero Supabase pide confirmar el correo. Desactiva "Confirm email" en Authentication → Providers → Email y luego toca Entrar.');
+          this.session = res.data.session;
+        } else {
+          if (!f.password) return err('Escribe tu contraseña.');
+          const res = await this.sb.auth.signInWithPassword({ email, password: f.password });
+          if (res.error) return err(this.errTxt(res.error));
+          this.session = res.data.session;
+        }
+        this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { password: '', password2: '', code: '' }) });
+        this.setSync({ email: this.session.user.email });
+        if (await this.checkMfa()) await this.afterLogin();
+        return this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, err: '' }) });
+      }
+      if (stage === 'enroll' || stage === 'verify') {
+        const code = f.code.replace(/\D/g, '');
+        if (code.length !== 6) return err('Escribe el código de 6 dígitos de tu app autenticadora.');
+        const v = await this.sb.auth.mfa.challengeAndVerify({ factorId: this.factorId, code });
+        if (v.error) return err(this.errTxt(v.error));
+        this.enrollInfo = null; this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { code: '' }) });
+        await this.checkMfa();
+        if (this.aal2) await this.afterLogin();
+        return this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, err: '' }) });
+      }
+    } catch (e) { return err(this.errTxt(e)); }
+  }
+  async afterLogin() {
     await this.pull();
+    const ed = this.state.ed;
     if (ed && ed.welcome) { this.setState({ ed: null }); this.finishWelcome(); }
   }
-  async logout() { if (this.sb) await this.sb.auth.signOut(); this.session = null; this.setSync({ status: 'idle', email: '' }); }
-  resetCloud() { try { localStorage.removeItem(CLOUD); } catch (e) {} this.cloud = null; this.sb = null; this.session = null; this.setSync({ status: 'off', email: '', msg: '' }); this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { url: '', key: '' }) }); }
+  authStage() {
+    if (!this.sb) return 'config';
+    if (!this.session) return 'login';
+    if (this.mfaNeed === 'enroll') return 'enroll';
+    if (this.mfaNeed === 'verify' || !this.aal2) return 'verify';
+    return 'ok';
+  }
+  async logout(global) {
+    clearTimeout(this.tp);
+    if (this.sb) await this.sb.auth.signOut(global ? { scope: 'global' } : undefined);
+    this.session = null; this.aal2 = false; this.mfaNeed = null; this.enrollInfo = null;
+    this.setSync({ status: 'idle', email: '' });
+  }
+  resetCloud() { try { localStorage.removeItem(CLOUD); } catch (e) {} this.cloud = null; this.sb = null; this.session = null; this.aal2 = false; this.setSync({ status: 'off', email: '', msg: '' }); this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { url: '', key: '' }) }); }
   exportData() {
     const blob = new Blob([JSON.stringify(this.state.data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mis-finanzas-' + iso(new Date()) + '.json';
@@ -418,8 +605,9 @@ class App extends Component {
       }
     }
     if (meta > 0 && savedCur < meta) recs.push({ tag: 'Ahorro', tone: 'tip', title: 'Te faltan ' + f(meta - savedCur) + ' para la meta de ' + MESL[new Date().getMonth()], body: 'Programa el traslado a tus cerditos apenas te paguen: lo que se ahorra primero no se gasta.', impact: 'Con eso cumples tu plan ' + PLANS[D.plan].n + ' al 100%' });
-    if (activos.length && D.perfil.ingresoQuincena > 0) {
-      const cuotas = activos.reduce((a, o) => a + o.x.cuota, 0), carga = cuotas / (D.perfil.ingresoQuincena * 2) * 100;
+    const ingM = this.per('m').ingreso;
+    if (activos.length && ingM > 0) {
+      const cuotas = activos.reduce((a, o) => a + o.x.cuota, 0), carga = cuotas / ingM * 100;
       recs.push({ tag: 'Deuda', tone: carga < 30 ? 'good' : 'warn', title: 'Tus cuotas son el ' + pctTxt(carga) + ' de tu ingreso', body: carga < 30 ? 'Estás por debajo del 30%, un nivel sano. Antes de pedir un crédito nuevo, espera a terminar uno de los actuales.' : 'Pasas del 30% recomendado. Prioriza abonar a la deuda más cara y no tomes créditos nuevos por ahora.', impact: 'Pagas ' + f(cuotas) + ' al mes en cuotas' });
     }
     if (veh && veh.real) {
@@ -432,7 +620,8 @@ class App extends Component {
       else if (delta > 10) recs.push({ tag: 'Resumen', tone: 'warn', title: 'Vas ' + pctTxt(delta) + ' por encima de la quincena pasada', body: 'Revisa en Gastos qué categoría subió más y ponle un tope para lo que queda.', impact: 'Llevas ' + f(q.total) + ' vs ' + f(q.prev) });
     }
     if (!D.movs.length) recs.push({ tag: 'Empezar', tone: 'tip', title: 'Registra tu primer gasto', body: 'Toca + cada vez que pagues algo. Con una semana de datos el asistente ya puede darte consejos útiles.', impact: 'Tarda menos de 5 segundos' });
-    if (!D.perfil.ingresoQuincena) recs.push({ tag: 'Perfil', tone: 'tip', title: 'Agrega tu ingreso por quincena', body: 'Con él calculo cuánto te queda disponible y tu meta de ahorro.', impact: 'Ajustes → Perfil e ingreso' });
+    if (!D.perfil.ingresoQuincena && !D.movs.some((x) => x.tipo === 'ingreso')) recs.push({ tag: 'Ingresos', tone: 'tip', title: 'Registra tus ingresos de la quincena', body: 'Con ellos calculo cuánto te queda disponible y tu meta de ahorro.', impact: 'Ajustes → Ingresos por quincena' });
+    { const qi = this.qIncome(qk(iso(new Date()))); if (qi.est) recs.push({ tag: 'Ingresos', tone: 'tip', title: 'Registra lo que recibiste esta quincena', body: 'Estoy usando tu salario estimado. Si tuviste extras, recargos u otro ingreso, regístralo para que los cálculos sean exactos.', impact: 'Ajustes → Ingresos por quincena' }); }
     if (!recs.length) recs.push({ tag: 'Resumen', tone: 'good', title: 'Todo en orden por ahora', body: 'No encontré alertas. Sigue registrando para detectar oportunidades.', impact: 'Vuelve a revisar la próxima quincena' });
     const tones = { tip: 'Oportunidad', warn: 'Atención', good: 'Vas bien' };
     return recs.map((r, i) => Object.assign(r, { cls: 'as-card ' + r.tone, toneTxt: tones[r.tone], delay: i * 110 }));
@@ -524,7 +713,7 @@ class App extends Component {
     });
     const pigTotal = pigs.reduce((a, g) => a + g.amtN, 0);
     // plan
-    const pl = PLANS[D.plan] || PLANS.bal, ingresoMes = D.perfil.ingresoQuincena * 2, meta = Math.round(ingresoMes * pl.p);
+    const pl = PLANS[D.plan] || PLANS.bal, ingresoMes = this.per('m').ingreso, meta = Math.round(ingresoMes * pl.p);
     const saved = Array.from({ length: 12 }, (_, i) => D.movs.filter((x) => x.tipo === 'aporte' && x.fecha.slice(0, 7) === y + '-' + pad(i + 1)).reduce((a, x) => a + x.monto, 0));
     const max = Math.max.apply(null, saved.concat([meta, 1]));
     const bars = MES.map((m, i) => { const real = i <= mI, v = real ? saved[i] : meta; return { m: m.charAt(0).toUpperCase(), h: Math.max(c.bar[1], Math.round(v / max * c.bar[0])), cls: real ? (i === mI ? 'bar real cur' : 'bar real') : 'bar proj', delay: 80 + i * 45 }; });
@@ -555,7 +744,7 @@ class App extends Component {
         del: () => (s.movConfirm ? this.delMov(ms.id) : this.setState({ movConfirm: true })) };
     }
     // formulario rápido
-    const map = ADD_MAP[s.addCat], tOpts = map.need ? D[map.need] : [];
+    const map = ADD_MAP[s.addCat], tOpts = map.need === 'isub' ? ISUB_OPTS : (map.need ? D[map.need] : []);
     const tSel = s.mvTarget && tOpts.some((o) => o.id === s.mvTarget) ? s.mvTarget : (tOpts[0] && tOpts[0].id);
     const mvTargets = tOpts.map((o) => ({ label: o.nombre, cls: o.id === tSel ? 'on' : '', pick: () => this.setState({ mvTarget: o.id }) }));
     const looks = LOOKS.map((L) => { const t = L[mode]; return { name: L.name, desc: L.desc, font: L.font, weight: L.weight, fstyle: L.fstyle, rad: L.rad, bg: t.bg, fg: t.fg, edge: t.edge, a0: t.a[0], a1: t.a[1], a2: t.a[2], on: lk === L.id, cls: lk === L.id ? 'on' : '', pick: () => this.pickLook(L.id) }; });
@@ -572,7 +761,7 @@ class App extends Component {
       goTarjetas: () => this.setState({ tab: 'gastos', sub: 'tarjetas' }), goVehiculo: () => this.setState({ tab: 'gastos', sub: 'vehiculo' }),
       replay: () => this.replay(), openLook: () => this.setState({ panel: true, welcome: false, sheet: false }),
       per: p, periods, segX: 'translateX(' + (pIdx * 100) + '%)', subX: 'translateX(' + (subIdx * 100) + '%)', uX: pT[pIdx][0], uW: pT[pIdx][1], sX: sT[subIdx][0], sW: sT[subIdx][1],
-      shownTxt: f(s.shown), ingresoTxt: f(p.ingreso), libreTxt: f(p.ingreso - p.total), usedPct,
+      shownTxt: f(s.shown), ingresoTxt: f(p.ingreso) + (p.ingresoEst ? ' (est.)' : ''), libreTxt: f(p.ingreso - p.total), usedPct,
       deltaTxt: hasPrev ? (delta < 0 ? '↓ ' : '↑ ') + String(Math.abs(delta)).replace('.', ',') + '%' : '• nuevo',
       deltaWord: hasPrev ? String(Math.abs(delta)).replace('.', ',') + '% ' + (delta < 0 ? 'menos' : 'más') : 'primer periodo',
       needle: s.splash ? -90 : Math.round(-90 + usedPct * 1.8),
@@ -593,17 +782,19 @@ class App extends Component {
       sheetOn: s.sheet, openSheet: () => this.setState({ sheet: true, mvErr: '' }), closeSheet: () => this.setState({ sheet: false, mvErr: '' }), save: () => this.saveMov(),
       addCats: ADDS.map((label, i) => ({ label, cls: s.addCat === i ? 'on' : '', pick: () => this.setState({ addCat: i, mvErr: '' }) })),
       mv: { monto: cfM > 0 ? miles(cfM) : '', nota: s.mv.nota }, mvMonto: (e) => this.setState({ mv: Object.assign({}, s.mv, { monto: e.target.value.replace(/\D/g, '') }), mvErr: '' }), mvNota: (e) => this.setState({ mv: Object.assign({}, this.state.mv, { nota: e.target.value }) }),
-      mvHasTargets: mvTargets.length > 0, mvTargets, mvTargetLbl: { tarjetas: '¿Con qué tarjeta?', vehiculos: '¿Qué vehículo?', cerditos: '¿A qué cerdito?' }[map.need] || '', mvHasErr: !!s.mvErr, mvErr: s.mvErr,
+      mvHasTargets: mvTargets.length > 0, mvTargets, mvTargetLbl: { tarjetas: '¿Con qué tarjeta?', vehiculos: '¿Qué vehículo?', cerditos: '¿A qué cerdito?', isub: '¿Qué tipo de ingreso?' }[map.need] || '', mvHasErr: !!s.mvErr, mvErr: s.mvErr,
       toastOn: s.toast,
       panelOn: s.panel, closePanel: () => { this.setState({ panel: false, welcome: false }); }, looks, showAcc: !s.welcome,
       apTitle: s.welcome ? 'Elige tu estilo' : 'Ajustes',
       apSub: s.welcome ? 'Tu app viene con 4 estilos y tema claro u oscuro. Cámbialo cuando quieras con el botón de paleta.' : 'Tus cuentas, la nube y la apariencia de la app.',
       accRows: [
-        { label: 'Perfil e ingreso', sub: D.perfil.ingresoQuincena ? f(D.perfil.ingresoQuincena) + ' por quincena' : 'Agrega tu ingreso', color: '#7a5cff', open: () => this.openEd('perfil') },
+        { label: 'Ingresos por quincena', sub: (() => { const q = this.qIncome(qk(todayIso)); return 'Esta quincena: ' + f(q.total) + (q.est ? ' (estimado)' : ''); })(), color: '#22b573', open: () => this.openEd('ingresos') },
+        { label: 'Perfil', sub: D.perfil.nombre ? D.perfil.nombre + ' · salario estimado ' + f(D.perfil.ingresoQuincena) : 'Tu nombre y salario estimado', color: '#7a5cff', open: () => this.openEd('perfil') },
         { label: 'Tarjetas', sub: D.tarjetas.length ? D.tarjetas.length + ' registradas' : 'Ninguna todavía', color: '#6fa8ff', open: () => this.openEd('tarjetas') },
         { label: 'Vehículos', sub: vs.length ? vs.map((x) => x.nombre).join(', ') : 'Ninguno todavía', color: '#ff6b3d', open: () => this.openEd('vehiculos') },
         { label: 'Cerditos', sub: pigs.length ? pigs.length + ' · ' + f(pigTotal) : 'Ninguno todavía', color: '#ff6f91', open: () => this.openEd('cerditos') },
         { label: 'Créditos', sub: credits.length ? credits.length + ' · cuotas ' + f(cuotaTot) + '/mes' : 'Ninguno todavía', color: '#3cc59a', open: () => this.openEd('creditos') },
+        { label: 'Seguridad del teléfono', sub: lock.enabled() ? 'PIN activo' + (lock.hasBio() ? ' · huella / Face ID' : '') + ' · datos cifrados' : 'Sin bloqueo · actívalo', color: '#e5484d', open: () => this.openEd('seguridad') },
         { label: 'Nube y copia de seguridad', sub: this.syncView().title, color: '#ffc94d', open: () => this.openEd('datos') }
       ],
       th: { light: D.prefs.theme === 'light' ? 'on' : '', dark: D.prefs.theme === 'dark' ? 'on' : '', auto: D.prefs.theme === 'auto' ? 'on' : '' }, themeX: 'translateX(' + (thIdx * 100) + '%)',
@@ -621,15 +812,20 @@ class App extends Component {
       asistOn: s.asist, asistLoading: s.asist && s.asistStep < 3, asistDone: s.asist && s.asistStep >= 3, asistMsg: ['Revisando tus gastos…', 'Calculando tus créditos…', 'Buscando oportunidades de ahorro…'][Math.min(2, s.asistStep)],
       edOn: !!s.ed, ed: s.ed ? this.edView(credx, cards, pigs) : {}, closeEd: () => this.closeEd(),
       sync: this.syncView(), syncNow: () => this.pull(), logout: () => this.logout(), exportData: () => this.exportData(), importData: (e) => this.importData(e), skipCloud: () => { this.setState({ ed: null }); this.finishWelcome(); },
-      movOn: !!movD, movD: movD || {}, closeMov: () => this.setState({ movSel: null, movConfirm: false })
+      movOn: !!movD, movD: movD || {}, closeMov: () => this.setState({ movSel: null, movConfirm: false }),
+      logoutAll: () => this.logout(true),
+      lockOn: s.locked, lk: { title: 'Mis Finanzas', msg: s.lockMsg, msgCls: s.lockErr ? 'err' : '', hasBio: lock.hasBio(), bio: () => this.unlockBio(),
+        dots: [0, 1, 2, 3, 4, 5].map((i) => ({ cls: i < s.lockPin.length ? 'on' : '' })),
+        keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((k) => ({ label: k === 'del' ? '⌫' : k, aria: k === 'del' ? 'Borrar' : (k ? 'Número ' + k : ''), cls: k === '' ? 'hide' : (k === 'del' ? 'ghost' : ''), press: () => k && this.pressKey(k) })) }
     };
   }
   syncView() {
     const s = this.state.sync, ago = s.last ? Math.max(0, Math.round((Date.now() - s.last) / 60000)) : null;
-    const agoTxt = ago === null ? '' : (ago < 1 ? 'hace un momento' : 'hace ' + ago + ' min');
-    if (!this.sb) return { cls: '', title: 'Solo en este teléfono', txt: 'Tus datos se guardan aquí. Conecta Supabase para sincronizarlos entre tus dispositivos.', logged: false };
-    if (!this.session) return { cls: s.status === 'err' ? 'err' : '', title: 'Proyecto conectado · inicia sesión', txt: s.msg || 'Entra con tu correo para sincronizar.', logged: false };
-    const t = { ok: ['ok', 'Sincronizado', 'Última sincronización ' + agoTxt + ' · ' + s.email], busy: ['busy', 'Sincronizando…', s.email], offline: ['', 'Sin conexión', 'Se guarda en el teléfono y se sube cuando vuelva el internet.'], err: ['err', 'Error de sincronización', s.msg], idle: ['busy', 'Conectando…', s.email] }[s.status] || ['', 'Conectado', s.email];
+    const agoTxt = ago === null ? '' : (ago < 1 ? 'hace un momento' : 'hace ' + ago + ' min'), who = 'usuario ' + userOf(s.email);
+    if (!this.sb) return { cls: '', title: 'Solo en este teléfono', txt: 'Tus datos se guardan aquí.', logged: false };
+    if (!this.session) return { cls: s.status === 'err' ? 'err' : '', title: 'Nube lista · inicia sesión', txt: s.msg || 'Entra con tu usuario para sincronizar.', logged: false };
+    if (!this.aal2) return { cls: 'busy', title: 'Falta el código de dos pasos', txt: 'Escribe el código de tu app autenticadora para sincronizar.', logged: false };
+    const t = { ok: ['ok', 'Sincronizado', 'Última sincronización ' + agoTxt + ' · ' + who], busy: ['busy', 'Sincronizando…', who], offline: ['', 'Sin conexión', 'Se guarda en el teléfono y se sube cuando vuelva el internet.'], err: ['err', 'Error de sincronización', s.msg], idle: ['busy', 'Conectando…', who] }[s.status] || ['', 'Conectado', who];
     return { cls: t[0], title: t[1], txt: t[2], logged: true };
   }
   edView(credx, cards, pigs) {
@@ -639,10 +835,29 @@ class App extends Component {
     const money = (id, label, o) => { const n = num(F[id]); return fld(id, label, Object.assign({ numeric: true, mode: 'numeric', ph: '$ 0', value: n > 0 ? miles(n) : '' }, o || {})); };
     const choice = (id, label, opts) => ({ id: 'ed-' + id, label, isInput: false, isChoice: true, hasHint: false, opts: opts.map(([v, l]) => ({ label: l, cls: F[id] === v ? 'on' : '', pick: () => this.setEdF(id, v) })) });
     const del = (id) => ({ delTxt: ed.confirm === id ? '¿Seguro?' : 'Eliminar', delCls: ed.confirm === id ? 'danger' : '', del: () => this.edDel(id) });
-    const base = { title: '', sub: '', canClose: !ed.welcome, hasList: false, listTitle: '', items: [], empty: false, emptyTxt: '', hasForm: true, formTitle: '', fields: [], hasErr: !!ed.err, err: ed.err, saveTxt: 'Guardar', saveCls: ed.busy ? 'ap-go off' : 'ap-go', save: () => this.edSave(), hasAlt: false, altTxt: '', alt: null, hasCancelEdit: !!ed.editId, cancelEdit: () => this.setState({ ed: Object.assign({}, ed, { editId: null, form: this.edDefaults(k), err: '' }) }), isDatos: false, welcome: !!ed.welcome };
+    const base = { title: '', sub: '', canClose: !ed.welcome, hasList: false, listTitle: '', items: [], empty: false, emptyTxt: '', hasForm: true, formTitle: '', fields: [], hasErr: !!ed.err, err: ed.err, saveTxt: 'Guardar', saveCls: ed.busy ? 'ap-go off' : 'ap-go', save: () => this.edSave(), hasAlt: false, altTxt: '', alt: null, hasAlt2: false, alt2Txt: '', alt2: null, hasNote: false, note: '', hasQr: false, qr: '', secret: '', otpUri: '', copySecret: null, copyTxt: 'Copiar clave', hasMeter: false, meterW: 0, meterC: '', meterTxt: '', hasOk: !!ed.ok, ok: ed.ok || '', hasCancelEdit: !!ed.editId, cancelEdit: () => this.setState({ ed: Object.assign({}, ed, { editId: null, form: this.edDefaults(k), err: '' }) }), isDatos: false, welcome: !!ed.welcome };
     const editing = !!ed.editId;
-    if (k === 'perfil') return Object.assign(base, { title: ed.welcome ? '¡Bienvenido!' : 'Perfil e ingreso', sub: ed.welcome ? 'Dos datos y empezamos. Luego conectas la nube y eliges el estilo.' : 'Con tu ingreso calculo lo disponible y tu meta de ahorro.', formTitle: 'Tus datos',
-      fields: [fld('nombre', '¿Cómo te llamas?', { ph: 'Tu nombre', ac: 'given-name' }), money('ingresoQuincena', 'Ingreso por quincena', { hint: 'Lo que recibes cada 15 días. Si te pagan mensual, divide entre 2.' })], saveTxt: ed.welcome ? 'Continuar' : 'Guardar' });
+    if (k === 'perfil') return Object.assign(base, { title: ed.welcome ? '¡Bienvenido!' : 'Perfil', sub: ed.welcome ? 'Dos datos y empezamos. Luego proteges la app, conectas la nube y eliges el estilo.' : 'Tu nombre y tu salario estimado por quincena.', formTitle: 'Tus datos',
+      fields: [fld('nombre', '¿Cómo te llamas?', { ph: 'Tu nombre', ac: 'given-name' }), money('ingresoQuincena', 'Salario estimado por quincena', { hint: 'Se usa solo en las quincenas donde no registres lo que realmente recibiste (Ajustes → Ingresos por quincena).' })], saveTxt: ed.welcome ? 'Continuar' : 'Guardar' });
+    if (k === 'ingresos') {
+      const keys = []; let kk = qk(iso(new Date())); for (let i = 0; i < 6; i++) { keys.push(kk); kk = qPrev(kk); }
+      return Object.assign(base, { title: 'Ingresos por quincena', sub: 'Registra lo que realmente recibiste: salario, extras, recargos y otros. Donde no registres salario uso tu estimado (' + f(D.perfil.ingresoQuincena) + ').', hasList: true, listTitle: 'Últimas quincenas',
+        items: keys.map((key, i) => { const q = this.qIncome(key); return { name: (i === 0 ? 'Esta quincena · ' : '') + qLabel(key) + ' · ' + f(q.total), sub: q.est ? 'Salario estimado' + (q.by.extra + q.by.otro > 0 ? ' + extras/otros ' + f(q.by.extra + q.by.otro) : '') : 'Salario ' + f(q.by.salario) + ' · extras ' + f(q.by.extra) + ' · otros ' + f(q.by.otro), color: q.est ? '#9aa0a6' : '#22b573', canEdit: true, edit: () => this.setState({ ed: Object.assign({}, this.state.ed, { form: this.incForm(key), err: '', ok: '' }) }), delTxt: 'Ver', delCls: '', del: () => this.setState({ ed: Object.assign({}, this.state.ed, { form: this.incForm(key), err: '', ok: '' }) }) }; }),
+        formTitle: 'Quincena ' + qLabel(F.q || keys[0]), fields: [{ id: 'ed-q', label: 'Quincena', isInput: false, isChoice: true, hasHint: false, opts: keys.map((key) => ({ label: qLabel(key), cls: F.q === key ? 'on' : '', pick: () => this.setState({ ed: Object.assign({}, this.state.ed, { form: this.incForm(key), err: '', ok: '' }) }) })) },
+          money('salario', 'Salario recibido', { hint: 'Déjalo vacío para usar el estimado.' }), money('extra', 'Horas extra y recargos'), money('otro', 'Otros ingresos', { hint: 'Ventas, bonos, arriendos, etc.' })],
+        saveTxt: 'Guardar quincena' });
+    }
+    if (k === 'seguridad') {
+      const on = lock.enabled(), pinF = (id, label, o) => fld(id, label, Object.assign({ numeric: true, mode: 'numeric', type: 'password', ph: '••••••', ac: 'off' }, o || {}));
+      const o2 = Object.assign(base, { title: ed.welcome ? 'Protege tu app' : 'Seguridad del teléfono', sub: 'Un PIN de 6 números cifra tus datos dentro de este teléfono. La app se bloquea sola si la dejas más de 1 minuto.' });
+      if (!on) return Object.assign(o2, { formTitle: 'Crear PIN', hasNote: true, note: 'Si olvidas el PIN no se pueden recuperar los datos del teléfono; si usas la nube, entras de nuevo con tu usuario y se descargan.',
+        fields: [pinF('pin', 'PIN nuevo (6 números)'), pinF('pin2', 'Repite el PIN')], saveTxt: ed.busy ? 'Cifrando…' : 'Activar bloqueo',
+        hasAlt: !!ed.bioOk || !!ed.welcome, altTxt: ed.welcome ? 'Ahora no' : 'Activar huella / Face ID', alt: () => (ed.welcome ? this.secNext() : this.secBio()) });
+      return Object.assign(o2, { formTitle: 'Cambiar PIN', hasNote: true, note: 'Bloqueo activo · datos cifrados (AES-256)' + (lock.hasBio() ? ' · huella / Face ID activa' : ''),
+        fields: [pinF('pinOld', 'PIN actual'), pinF('pin', 'PIN nuevo'), pinF('pin2', 'Repite el PIN nuevo')], saveTxt: ed.busy ? 'Un momento…' : 'Cambiar PIN',
+        hasAlt: true, altTxt: ed.welcome ? 'Continuar' : (lock.hasBio() ? 'Quitar huella / Face ID' : 'Activar huella / Face ID (usa el PIN actual)'), alt: () => (ed.welcome ? this.secNext() : this.secBio()),
+        hasAlt2: !ed.welcome, alt2Txt: ed.confirmOff ? 'Confirmar: quitar bloqueo' : 'Quitar bloqueo', alt2: () => this.secDisable() });
+    }
     if (k === 'tarjetas') return Object.assign(base, { title: 'Tarjetas de crédito', sub: 'Lo que compres con ellas se suma a lo usado; los pagos lo restan.', hasList: true, listTitle: 'Tus tarjetas',
       items: D.tarjetas.map((t, i) => Object.assign({ name: t.nombre + (t.ult4 ? ' •• ' + t.ult4 : ''), sub: 'Usado ' + cards[i].usedTxt + ' de ' + f(t.cupo) + (t.pago ? ' · paga el ' + t.pago : ''), color: '#6fa8ff', canEdit: true, edit: () => this.edEdit(t) }, del(t.id))),
       empty: !D.tarjetas.length, emptyTxt: 'Aún no tienes tarjetas.', formTitle: editing ? 'Editar tarjeta' : 'Agregar tarjeta', saveTxt: editing ? 'Guardar cambios' : 'Agregar tarjeta',
@@ -662,13 +877,32 @@ class App extends Component {
       items: D.creditos.map((cr, i) => Object.assign({ name: cr.name, sub: f(credx[i].x.cuota) + '/mes · ' + credx[i].x.k + ' de ' + credx[i].x.n + ' cuotas', color: '#3cc59a', canEdit: false }, del(cr.id))),
       empty: !D.creditos.length, emptyTxt: 'Aún no tienes créditos.', formTitle: '', saveTxt: '+ Agregar crédito' });
     // datos / nube
-    const cf = this.state.cloudForm, setC = (key) => (e) => this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { [key]: e.target.value }), ed: Object.assign({}, this.state.ed, { err: '' }) });
-    const cfld = (id, label, o) => Object.assign({ id: 'cl-' + id, label, isInput: true, isChoice: false, type: 'text', mode: 'text', ph: '', value: cf[id], ac: 'off', hasHint: false, hint: '', set: setC(id) }, o || {}, o && o.hint ? { hasHint: true } : {});
-    const modo = { id: 'cl-modo', label: '¿Tienes cuenta?', isInput: false, isChoice: true, hasHint: false, opts: [['entrar', 'Entrar'], ['crear', 'Crear cuenta']].map(([v, l]) => ({ label: l, cls: cf.modo === v ? 'on' : '', pick: () => this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { modo: v }) }) })) };
-    const acct = [modo, cfld('email', 'Correo', { type: 'email', mode: 'email', ph: 'tu@correo.com', ac: 'email' }), cfld('password', 'Contraseña', { type: 'password', ph: 'Mínimo 6 caracteres', ac: cf.modo === 'crear' ? 'new-password' : 'current-password' })];
-    const o = Object.assign(base, { title: ed.welcome ? 'Sincroniza en la nube' : 'Nube y copia de seguridad', sub: ed.welcome ? 'Conecta tu proyecto de Supabase para ver tus datos en todos tus dispositivos. Puedes hacerlo después.' : 'Tus datos siempre se guardan en el teléfono; la nube es la copia sincronizada.', isDatos: true });
-    if (!this.sb) return Object.assign(o, { formTitle: 'Conectar Supabase', fields: [cfld('url', 'Project URL', { type: 'url', mode: 'url', ph: 'https://xxxx.supabase.co', hint: 'Supabase → Project Settings → API (o Data API).' }), cfld('key', 'Clave anon / publishable', { ph: 'eyJhbGciOi… o sb_publishable_…' })].concat(acct), saveTxt: ed.busy ? 'Conectando…' : (cf.modo === 'crear' ? 'Conectar y crear cuenta' : 'Conectar y entrar') });
-    if (!this.session) return Object.assign(o, { formTitle: 'Inicia sesión', fields: acct, saveTxt: ed.busy ? 'Un momento…' : (cf.modo === 'crear' ? 'Crear cuenta' : 'Entrar'), hasAlt: true, altTxt: 'Usar otro proyecto de Supabase', alt: () => this.resetCloud() });
+    const cf = this.state.cloudForm, setC = (key, clean) => (e) => this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { [key]: clean ? clean(e.target.value) : e.target.value }), ed: Object.assign({}, this.state.ed, { err: '' }) });
+    const cfld = (id, label, o) => Object.assign({ id: 'cl-' + id, label, isInput: true, isChoice: false, type: 'text', mode: 'text', ph: '', value: cf[id], ac: 'off', hasHint: false, hint: '', set: setC(id, o && o.clean) }, o || {}, o && o.hint ? { hasHint: true } : {});
+    const stage = this.authStage(), crear = cf.modo === 'crear';
+    const o = Object.assign(base, { title: ed.welcome ? 'Sincroniza en la nube' : 'Nube y copia de seguridad', sub: ed.welcome ? 'Entra con tu usuario para tener tus datos en todos tus dispositivos. Puedes hacerlo después.' : 'Tus datos siempre se guardan en el teléfono; la nube es la copia sincronizada y protegida.', isDatos: true });
+    if (stage === 'config') return Object.assign(o, { formTitle: 'Conectar Supabase (avanzado)', fields: [cfld('url', 'Project URL', { type: 'url', mode: 'url', ph: 'https://xxxx.supabase.co' }), cfld('key', 'Clave anon / publishable', { ph: 'eyJhbGciOi… o sb_publishable_…' })], saveTxt: 'Conectar' });
+    if (stage === 'login') {
+      const pc = passCheck(cf.password, cf.user), colors = ['#e5484d', '#f76b15', '#f5a524', '#46a758', '#22b573'];
+      const modo = { id: 'cl-modo', label: '¿Ya tienes usuario?', isInput: false, isChoice: true, hasHint: false, opts: [['entrar', 'Entrar'], ['crear', 'Crear usuario']].map(([v, l]) => ({ label: l, cls: cf.modo === v ? 'on' : '', pick: () => this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { modo: v }), ed: Object.assign({}, this.state.ed, { err: '' }) }) })) };
+      const fields = [modo, cfld('user', 'Usuario', { ph: 'ej. patrick.d', ac: 'username', clean: (v) => v.toLowerCase().replace(/\s/g, '') }), cfld('password', 'Contraseña', { type: 'password', ph: crear ? '12+ caracteres, mayúscula, número y símbolo' : 'Tu contraseña', ac: crear ? 'new-password' : 'current-password' })];
+      if (crear) fields.push(cfld('password2', 'Repite la contraseña', { type: 'password', ac: 'new-password' }));
+      return Object.assign(o, { formTitle: crear ? 'Crear usuario' : 'Entrar', fields, saveTxt: ed.busy ? 'Un momento…' : (crear ? 'Crear usuario' : 'Entrar'),
+        hasMeter: crear && cf.password.length > 0, meterW: (pc.score + 1) * 20, meterC: colors[pc.score], meterTxt: pc.ok ? 'Contraseña fuerte ✓' : 'Falta: ' + pc.missing.join(', '),
+        hasNote: crear, note: 'Después te pediré un código de 6 dígitos de una app autenticadora (Google Authenticator, Microsoft Authenticator o Authy). Instálala antes si no la tienes.',
+        hasAlt: !this.cloud.builtin, altTxt: 'Usar otro proyecto de Supabase', alt: () => this.resetCloud() });
+    }
+    if (stage === 'enroll') {
+      const ei = this.enrollInfo || {};
+      return Object.assign(o, { formTitle: 'Activa la verificación en dos pasos', hasNote: true, note: '1) Abre tu app autenticadora y agrega una cuenta: escanea el QR, toca "Abrir autenticador" o pega la clave. 2) Escribe aquí el código de 6 dígitos que te muestra.',
+        hasQr: !!ei.qr, qr: ei.qr || '', secret: ei.secret || '', otpUri: ei.uri || '#', copyTxt: this.state.copied ? 'Copiada ✓' : 'Copiar clave',
+        copySecret: () => { try { navigator.clipboard.writeText(ei.secret); this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 2000); } catch (e) {} },
+        fields: [cfld('code', 'Código de 6 dígitos', { mode: 'numeric', ph: '123456', ac: 'one-time-code', clean: (v) => v.replace(/\D/g, '').slice(0, 6) })], saveTxt: ed.busy ? 'Verificando…' : 'Verificar y activar',
+        hasAlt: true, altTxt: 'Cancelar y salir', alt: () => this.logout() });
+    }
+    if (stage === 'verify') return Object.assign(o, { formTitle: 'Código de verificación', hasNote: true, note: 'Abre tu app autenticadora y escribe el código de 6 dígitos de "Mis Finanzas".',
+      fields: [cfld('code', 'Código de 6 dígitos', { mode: 'numeric', ph: '123456', ac: 'one-time-code', clean: (v) => v.replace(/\D/g, '').slice(0, 6) })], saveTxt: ed.busy ? 'Verificando…' : 'Verificar',
+      hasAlt: true, altTxt: 'Salir', alt: () => this.logout() });
     return Object.assign(o, { hasForm: false });
   }
   render() {

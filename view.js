@@ -1153,6 +1153,15 @@ ${(v.edOn) ? html`
 
       ${(v.ed.hasForm) ? html`
         <div class="ap-lbl">${v.ed.formTitle}</div>
+        ${(v.ed.hasNote) ? html`<div class="ed-note">${v.ed.note}</div>` : null}
+        ${(v.ed.hasQr) ? html`
+          <div class="qr-box">
+            <img src=${v.ed.qr} alt="Código QR para la app autenticadora" width="168" height="168" />
+            <div style="font-size: 12.5px; color: var(--apmut); margin-top: 10px">¿Estás en este mismo teléfono? Usa el botón o copia la clave:</div>
+            <div class="qr-secret">${v.ed.secret}</div>
+            <div style="display: flex; gap: 8px; width: 100%"><a class="ap-alt" style="margin-top: 0; display: flex; align-items: center; justify-content: center; text-decoration: none" href=${v.ed.otpUri}>Abrir autenticador</a><button class="ap-alt" style="margin-top: 0" onClick=${v.ed.copySecret}>${v.ed.copyTxt}</button></div>
+          </div>
+        ` : null}
         ${((v.ed.fields) || []).map((fd, $index) => html`
           <div>
             <label class="ap-fl" for=${fd.id}>${fd.label}</label>
@@ -1165,9 +1174,12 @@ ${(v.edOn) ? html`
             ${(fd.hasHint) ? html`<div style="font-size: 12px; color: var(--apmut); margin-top: 5px">${fd.hint}</div>` : null}
           </div>
         `)}
+        ${(v.ed.hasMeter) ? html`<div class="pw-meter"><span style=${"width: " + (v.ed.meterW) + "%; background: " + (v.ed.meterC)}></span></div><div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">${v.ed.meterTxt}</div>` : null}
+        ${(v.ed.hasOk) ? html`<div class="ap-ok">${v.ed.ok}</div>` : null}
         ${(v.ed.hasErr) ? html`<div class="ap-err">${v.ed.err}</div>` : null}
         <button class=${v.ed.saveCls} onClick=${v.ed.save}>${v.ed.saveTxt}</button>
         ${(v.ed.hasAlt) ? html`<button class="ap-alt" onClick=${v.ed.alt}>${v.ed.altTxt}</button>` : null}
+        ${(v.ed.hasAlt2) ? html`<button class="ap-alt danger-t" onClick=${v.ed.alt2}>${v.ed.alt2Txt}</button>` : null}
         ${(v.ed.hasCancelEdit) ? html`<button class="ap-alt" onClick=${v.ed.cancelEdit}>Cancelar edición</button>` : null}
       ` : null}
 
@@ -1177,10 +1189,11 @@ ${(v.edOn) ? html`
           <div style="font-size: 12.5px; color: var(--apmut); margin-top: 4px; line-height: 1.45">${v.sync.txt}</div>
           ${(v.sync.logged) ? html`
             <div style="display: flex; gap: 8px; margin-top: 12px"><button class="ap-alt" style="margin-top: 0" onClick=${v.syncNow}>Sincronizar ahora</button><button class="ap-alt" style="margin-top: 0" onClick=${v.logout}>Cerrar sesión</button></div>
+            <button class="ap-alt" onClick=${v.logoutAll}>Cerrar sesión en todos mis dispositivos</button>
           ` : null}
         </div>
         <div class="ap-lbl">Copia de seguridad</div>
-        <div style="font-size: 12.5px; color: var(--apmut); line-height: 1.45">Descarga un archivo con todos tus datos o recupéralos desde uno.</div>
+        <div style="font-size: 12.5px; color: var(--apmut); line-height: 1.45">Descarga un archivo con todos tus datos o recupéralos desde uno. El archivo no va cifrado: guárdalo en un lugar seguro.</div>
         <div style="display: flex; gap: 8px; margin-top: 10px">
           <button class="ap-alt" style="margin-top: 0" onClick=${v.exportData}>Exportar (.json)</button>
           <label class="ap-alt" style="margin-top: 0; display: flex; align-items: center; justify-content: center; cursor: pointer">Importar<input type="file" accept="application/json,.json" style="display: none" onChange=${v.importData} /></label>
@@ -1205,6 +1218,19 @@ ${(v.movOn) ? html`
       <div style="grid-column: 1 / -1"><div style="color: var(--apmut)">Asociado a</div><b>${v.movD.dest}</b></div>
     </div>
     <button class=${v.movD.delCls} onClick=${v.movD.del}>${v.movD.delTxt}</button>
+  </div>
+` : null}
+
+${(v.lockOn) ? html`
+  <div class="lk" role="dialog" aria-label="Desbloquear Mis Finanzas">
+    <div class="lk-logo"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="3"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></div>
+    <div style="font-family: 'Sora', sans-serif; font-size: 22px; font-weight: 600; margin-top: 16px">${v.lk.title}</div>
+    <div class=${"lk-msg " + (v.lk.msgCls)}>${v.lk.msg}</div>
+    <div class="lk-dots">${((v.lk.dots) || []).map((dt, $index) => html`<span class=${"lk-dot " + (dt.cls)}></span>`)}</div>
+    <div class="lk-pad">
+      ${((v.lk.keys) || []).map((ky, $index) => html`<button class=${"lk-key " + (ky.cls)} onClick=${ky.press} aria-label=${ky.aria}>${ky.label}</button>`)}
+    </div>
+    ${(v.lk.hasBio) ? html`<button class="lk-bio" onClick=${v.lk.bio}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 11v3M8.5 8.5A5 5 0 0 1 17 12v1M7 12a5 5 0 0 0 .5 2.2M12 5a7 7 0 0 1 7 7v1M5 12a7 7 0 0 1 3-5.7M9.5 18a8 8 0 0 0 1.5-4M14.5 17.5a11 11 0 0 0 .5-3.5"></path></svg>Usar huella / Face ID</button>` : null}
   </div>
 ` : null}
 </div>`;

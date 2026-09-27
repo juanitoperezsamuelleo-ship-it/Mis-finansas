@@ -9,6 +9,16 @@ Es una **PWA**: se instala desde el navegador, sin App Store ni Play Store, y fu
 - **Android (Chrome):** abre el enlace de la app → menú ⋮ → **Instalar app** (o "Agregar a pantalla principal").
 - **iPhone (Safari):** abre el enlace → botón **Compartir** → **Agregar a inicio**. Tiene que ser en Safari.
 
+## Seguridad
+
+- **Bloqueo con PIN** (6 números) y opcionalmente **huella / Face ID**. Con el bloqueo activo, los datos del teléfono se guardan **cifrados (AES-256-GCM)**; la clave se deriva del PIN (PBKDF2, 310.000 iteraciones). La app se bloquea sola tras 1 minuto en segundo plano y aplica esperas crecientes después de 5 intentos fallidos.
+- **Nube con usuario y contraseña robusta** (12+ caracteres, mayúscula, número y símbolo) y **verificación en dos pasos obligatoria** con app autenticadora (TOTP).
+- La base de datos (RLS) solo entrega los datos del propio usuario y **solo si pasó la verificación en dos pasos** (`aal2`).
+
+## Ingresos por quincena
+
+En **Ajustes → Ingresos por quincena** registras lo que realmente recibiste en cada quincena (salario, extras y recargos, otros). Donde no registres salario, la app usa el salario estimado del perfil y lo marca como "estimado". Desde **+ → Ingreso** también puedes sumar un ingreso suelto.
+
 ## Sincronización con Supabase (opcional)
 
 1. Crea un proyecto gratis en [supabase.com](https://supabase.com).
