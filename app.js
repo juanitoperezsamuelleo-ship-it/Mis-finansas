@@ -597,7 +597,10 @@ class App extends Component {
         const code = f.code.replace(/\D/g, '');
         if (code.length !== 6) return err('Escribe el código de 6 dígitos de tu app autenticadora.');
         const v = await this.sb.auth.mfa.challengeAndVerify({ factorId: this.factorId, code });
-        if (v.error) return err(this.errTxt(v.error));
+        if (v.error) {
+          if (/factor.*not found|not found/i.test(v.error.message || '')) { try { localStorage.removeItem('mf-enroll'); } catch (e) {} await this.checkMfa(); this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { code: '' }) }); return err('La clave anterior ya no es válida. Te generé una nueva: bórrala del autenticador y agrega esta.'); }
+          return err(this.errTxt(v.error));
+        }
         this.enrollInfo = null; try { localStorage.removeItem('mf-enroll'); } catch (e) {} this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { code: '' }) });
         await this.checkMfa();
         if (this.aal2) await this.afterLogin();
