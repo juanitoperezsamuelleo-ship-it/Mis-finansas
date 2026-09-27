@@ -496,11 +496,19 @@ class App extends Component {
     const ok = (lf.data.totp || []).find((x) => x.status === 'verified');
     if (ok) { this.mfaNeed = 'verify'; this.factorId = ok.id; }
     else {
-      for (const x of (lf.data.all || []).filter((x) => x.status !== 'verified')) await this.sb.auth.mfa.unenroll({ factorId: x.id });
-      const e = await this.sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Mis Finanzas ' + new Date().toISOString().slice(0, 16) });
-      if (e.error) throw e.error;
-      this.mfaNeed = 'enroll'; this.factorId = e.data.id;
-      this.enrollInfo = { qr: e.data.totp.qr_code, secret: e.data.totp.secret, uri: e.data.totp.uri };
+      // Reutiliza la inscripción pendiente para que la clave no cambie si cierras y vuelves a abrir la app.
+      let saved = null; try { saved = JSON.parse(localStorage.getItem('mf-enroll')); } catch (e) {}
+      const pend = (lf.data.all || []).filter((x) => x.status !== 'verified');
+      const keep = saved && saved.user === this.session.user.id && pend.find((x) => x.id === saved.factorId);
+      if (keep) { this.mfaNeed = 'enroll'; this.factorId = saved.factorId; this.enrollInfo = saved; }
+      else {
+        for (const x of pend) await this.sb.auth.mfa.unenroll({ factorId: x.id });
+        const e = await this.sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Mis Finanzas ' + new Date().toISOString().slice(0, 16) });
+        if (e.error) throw e.error;
+        this.mfaNeed = 'enroll'; this.factorId = e.data.id;
+        this.enrollInfo = { factorId: e.data.id, user: this.session.user.id, qr: e.data.totp.qr_code, secret: e.data.totp.secret, uri: e.data.totp.uri };
+        try { localStorage.setItem('mf-enroll', JSON.stringify(this.enrollInfo)); } catch (e2) {}
+      }
     }
     this.setSync({ status: 'idle' });
     return false;
@@ -538,7 +546,7 @@ class App extends Component {
     if (/Email not confirmed/i.test(m)) return 'La cuenta existe pero Supabase exige confirmar correo: desactiva "Confirm email" en Authentication → Providers → Email.';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sin conexión con la nube. Revisa tu internet.';
     if (/already registered|already exists/i.test(m)) return 'Ese usuario ya existe: elige "Entrar".';
-    if (/Invalid TOTP|invalid.*code|expired/i.test(m)) return 'Código incorrecto o vencido. Escribe el código actual de tu app autenticadora.';
+    if (/Invalid TOTP|invalid.*code|expired/i.test(m)) return 'Código incorrecto. Revisa que en tu autenticador uses la entrada que agregaste con ESTA clave (borra las entradas anteriores de Mis Finanzas) y que la hora del teléfono esté en automático.';
     if (/rate limit|too many/i.test(m)) return 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.';
     if (/row-level security|permission denied/i.test(m)) return 'Acceso denegado: verifica tu código de dos pasos.';
     if (/mfa.*disabled|MFA enroll is disabled/i.test(m)) return 'La verificación en dos pasos está desactivada en Supabase (Authentication → Multi-Factor).';
@@ -590,7 +598,7 @@ class App extends Component {
         if (code.length !== 6) return err('Escribe el código de 6 dígitos de tu app autenticadora.');
         const v = await this.sb.auth.mfa.challengeAndVerify({ factorId: this.factorId, code });
         if (v.error) return err(this.errTxt(v.error));
-        this.enrollInfo = null; this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { code: '' }) });
+        this.enrollInfo = null; try { localStorage.removeItem('mf-enroll'); } catch (e) {} this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { code: '' }) });
         await this.checkMfa();
         if (this.aal2) await this.afterLogin();
         return this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, err: '' }) });
@@ -955,7 +963,7 @@ class App extends Component {
     }
     if (stage === 'enroll') {
       const ei = this.enrollInfo || {};
-      return Object.assign(o, { formTitle: 'Activa la verificación en dos pasos', hasNote: true, note: '1) Abre tu app autenticadora y agrega una cuenta: escanea el QR, toca "Abrir autenticador" o pega la clave. 2) Escribe aquí el código de 6 dígitos que te muestra.',
+      return Object.assign(o, { formTitle: 'Activa la verificación en dos pasos', hasNote: true, note: '1) Si ya habías agregado Mis Finanzas antes en tu autenticador, bórrala. 2) Agrega esta clave: escanea el QR, toca "Abrir autenticador" o pégala. 3) Escribe aquí el código de 6 dígitos. No compartas esta clave ni fotos de ella.',
         hasQr: !!ei.qr, qr: ei.qr || '', secret: ei.secret || '', otpUri: ei.uri || '#', copyTxt: this.state.copied ? 'Copiada ✓' : 'Copiar clave',
         copySecret: () => { try { navigator.clipboard.writeText(ei.secret); this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 2000); } catch (e) {} },
         fields: [cfld('code', 'Código de 6 dígitos', { mode: 'numeric', ph: '123456', ac: 'one-time-code', clean: (v) => v.replace(/\D/g, '').slice(0, 6) })], saveTxt: ed.busy ? 'Verificando…' : 'Verificar y activar',
