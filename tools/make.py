@@ -74,6 +74,7 @@ R = [
     ('>GASTO GUARDADO<', '>GUARDADO<'),
     ('para ti con los datos de esta quincena.', 'para ti con tus datos de hoy.'),
     ('>Apariencia<', '>{{apTitle}}<'),
+    ('<div style="display: flex; gap: 8px; margin-top: 14px"><sc-for list="{{plans}}"', '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px"><sc-for list="{{plans}}"'),
     ('+ $ 50 mil', 'Abonar'),
     ('>+ 50 mil<', '>ABONAR<'),
     ('Agregar 50 mil', 'Abonar al cerdito'),
@@ -147,6 +148,21 @@ mk = inject_start(mk, '<sc-if value="{{isVehiculo}}"',
     '<sc-if value="{{noVeh}}" hint-placeholder-val="{{false}}"><button onClick="{{openVehiculos}}" class="gen-add" style="grid-column: 1 / -1">+ Agrega tu moto o carro</button></sc-if>'
     '<sc-if value="{{vehMulti}}" hint-placeholder-val="{{false}}"><button onClick="{{nextVeh}}" class="gen-add" style="grid-column: 1 / -1">Ver {{vehNext}} ›</button></sc-if>')
 mk = inject_end(mk, '<sc-if value="{{isDiario}}"', '<sc-if value="{{noMovs}}" hint-placeholder-val="{{false}}"><div class="gen-empty">Aún no hay movimientos en este periodo. Toca + para registrar el primero.</div></sc-if>')
+
+# ---------- 5b. Plan: bloque para registrar ahorro
+SAVE = ('<div class="gen-save" style="grid-column: 1 / -1"><div class="gs-row"><div style="min-width: 0"><div class="gs-lbl">Ahorrado en {{mesLower}}</div>'
+        '<div class="gs-big">{{sv.mesTxt}} <span class="gs-of">de {{metaTxt}}</span></div></div>'
+        '<button class="gs-btn" onClick="{{openAhorro}}">+ Registrar ahorro</button></div>'
+        '<div class="gs-bar"><span style="width: {{septPct}}%"></span></div>'
+        '<div class="gs-sub">Año {{anio}}: {{sv.anioTxt}} de {{sv.metaAnualTxt}} ({{sv.anioPct}}%)</div></div>')
+out, pos = '', 0
+while True:
+    i = mk.find('list="{{plans}}"', pos)
+    if i < 0: break
+    j = mk.find('</sc-for>', i); k = mk.find('</div>', j) + len('</div>')
+    out += mk[pos:k] + SAVE; pos = k
+mk = out + mk[pos:]
+assert mk.count('gen-save') == 4
 
 # ---------- 6. panel: filas de "Mis cuentas"
 ROWS = '''<sc-if value="{{showAcc}}" hint-placeholder-val="{{true}}"><div class="ap-lbl">Mis cuentas</div><div class="ap-rows">

@@ -52,11 +52,11 @@ function loadLocal() { try { return normalize(JSON.parse(localStorage.getItem(KE
 function saveLocal(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
 function loadCloudCfg() { try { return JSON.parse(localStorage.getItem(CLOUD)) || null; } catch (e) { return null; } }
 
-const ADDS = ['Diario', 'Tarjeta', 'Vehículo', 'Hogar', 'Cerdito', 'Ingreso', 'Pago tarjeta'];
+const ADDS = ['Diario', 'Tarjeta', 'Vehículo', 'Hogar', 'Ahorro', 'Ingreso', 'Pago tarjeta'];
 const ISUB_OPTS = [{ id: 'salario', nombre: 'Salario' }, { id: 'extra', nombre: 'Extras y recargos' }, { id: 'otro', nombre: 'Otros' }];
 const ADD_MAP = [
   { tipo: 'gasto', cat: 'diario' }, { tipo: 'gasto', cat: 'tarjeta', need: 'tarjetas' }, { tipo: 'gasto', cat: 'vehiculo', need: 'vehiculos', optional: true },
-  { tipo: 'gasto', cat: 'hogar' }, { tipo: 'aporte', cat: 'cerdito', need: 'cerditos' }, { tipo: 'ingreso', cat: 'ingreso', need: 'isub' }, { tipo: 'pagoTarjeta', cat: 'tarjeta', need: 'tarjetas' }
+  { tipo: 'gasto', cat: 'hogar' }, { tipo: 'aporte', cat: 'cerdito', need: 'ahorro', optional: true }, { tipo: 'ingreso', cat: 'ingreso', need: 'isub' }, { tipo: 'pagoTarjeta', cat: 'tarjeta', need: 'tarjetas' }
 ];
 const CAT_IDX = { diario: 0, tarjeta: 1, vehiculo: 2, hogar: 3 };
 const CAT_NAME = { diario: 'Diario', tarjeta: 'Tarjeta', vehiculo: 'Vehículo', hogar: 'Hogar', cerdito: 'Cerdito', ingreso: 'Ingreso' };
@@ -261,7 +261,7 @@ class App extends Component {
   itemOf(x, c) {
     const D = this.state.data, name = (arr, id) => { const o = arr.find((z) => z.id === id); return o ? o.nombre : '(eliminado)'; };
     let t = x.nota, dest = '';
-    if (x.tipo === 'aporte') { dest = name(D.cerditos, x.cerditoId); t = (x.nota ? x.nota + ' · ' : (x.monto < 0 ? 'Retiro de ' : 'Aporte a ')) + dest; }
+    if (x.tipo === 'aporte') { dest = x.cerditoId ? name(D.cerditos, x.cerditoId) : 'Ahorro general'; t = (x.nota ? x.nota + ' · ' : (x.monto < 0 ? 'Retiro de ' : 'Aporte a ')) + dest; }
     else if (x.tipo === 'pagoTarjeta') { dest = name(D.tarjetas, x.tarjetaId); t = t || 'Pago de ' + dest; }
     else if (x.tipo === 'ingreso') { t = t || ISUB[x.sub] || 'Ingreso'; dest = ISUB[x.sub] || 'Otros ingresos'; }
     else {
@@ -282,13 +282,13 @@ class App extends Component {
   saveMov() {
     const s = this.state, map = ADD_MAP[s.addCat], monto = num(s.mv.monto), D = s.data;
     if (!(monto > 0)) return this.setState({ mvErr: 'Escribe el monto.' });
-    const opts = map.need === 'isub' ? ISUB_OPTS : (map.need ? D[map.need] : []);
-    let target = s.mvTarget && opts.some((o) => o.id === s.mvTarget) ? s.mvTarget : (opts[0] && opts[0].id);
+    const opts = map.need === 'isub' ? ISUB_OPTS : (map.need === 'ahorro' ? [{ id: '', nombre: 'Ahorro general' }].concat(D.cerditos) : (map.need ? D[map.need] : []));
+    let target = s.mvTarget != null && opts.some((o) => o.id === s.mvTarget) ? s.mvTarget : (opts[0] && opts[0].id);
     if (map.need && !map.optional && !target) return this.setState({ mvErr: { tarjetas: 'Primero agrega una tarjeta en Ajustes → Tarjetas.', cerditos: 'Primero crea un cerdito en Ajustes → Cerditos.' }[map.need] });
     const mov = { id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: map.tipo, cat: map.cat, monto, nota: s.mv.nota.trim() };
     if (map.need === 'tarjetas') mov.tarjetaId = target;
     if (map.need === 'vehiculos' && target) mov.vehiculoId = target;
-    if (map.need === 'cerditos') mov.cerditoId = target;
+    if (map.need === 'ahorro' && target) mov.cerditoId = target;
     if (map.need === 'isub') mov.sub = target || 'extra';
     this.setState({ sheet: false, mv: { monto: '', nota: '' }, mvErr: '' });
     this.mut((d) => d.movs.push(mov), { recount: true });
@@ -305,7 +305,7 @@ class App extends Component {
       tarjetas: { nombre: '', ult4: '', cupo: '', usadoInicial: '', corte: '', pago: '' },
       vehiculos: { nombre: '', tipo: 'moto', km: '', aceiteKm: '', aceiteCada: '', soat: '' },
       cerditos: { nombre: '', meta: '', inicial: '', fecha: '' },
-      creditos: {}, datos: {}, meta: { metaMensual: this.state.data.metaMensual ? String(this.state.data.metaMensual) : '' }, seguridad: { pin: '', pin2: '', pinOld: '' },
+      creditos: {}, datos: {}, ahorro: { monto: '', destino: '', nota: '' }, meta: { metaMensual: this.state.data.metaMensual ? String(this.state.data.metaMensual) : '' }, seguridad: { pin: '', pin2: '', pinOld: '' },
       ingresos: this.incForm(qk(iso(new Date())))
     }[kind];
   }
@@ -321,6 +321,12 @@ class App extends Component {
       return this.setState({ ed: null });
     }
     if (k === 'creditos') return this.setState({ ed: null, cred: true });
+    if (k === 'ahorro') {
+      const monto = num(f.monto);
+      if (!(monto > 0)) return err('Escribe cuánto ahorraste.');
+      this.mut((d) => d.movs.push(Object.assign({ id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: 'aporte', cat: 'cerdito', monto, nota: f.nota.trim() || 'Ahorro' }, f.destino ? { cerditoId: f.destino } : {})));
+      return this.setState({ ed: Object.assign({}, ed, { form: { monto: '', destino: f.destino, nota: '' }, err: '', ok: 'Guardado: ' + fmt(monto) + '. Cuenta para tu meta del mes y del año.' }) });
+    }
     if (k === 'meta') {
       if (!(num(f.metaMensual) > 0)) return err('Escribe cuánto quieres ahorrar al mes.');
       this.mut((d) => { d.metaMensual = num(f.metaMensual); d.plan = 'custom'; });
@@ -823,8 +829,8 @@ class App extends Component {
         del: () => (s.movConfirm ? this.delMov(ms.id) : this.setState({ movConfirm: true })) };
     }
     // formulario rápido
-    const map = ADD_MAP[s.addCat], tOpts = map.need === 'isub' ? ISUB_OPTS : (map.need ? D[map.need] : []);
-    const tSel = s.mvTarget && tOpts.some((o) => o.id === s.mvTarget) ? s.mvTarget : (tOpts[0] && tOpts[0].id);
+    const map = ADD_MAP[s.addCat], tOpts = map.need === 'isub' ? ISUB_OPTS : (map.need === 'ahorro' ? [{ id: '', nombre: 'Ahorro general' }].concat(D.cerditos) : (map.need ? D[map.need] : []));
+    const tSel = s.mvTarget != null && tOpts.some((o) => o.id === s.mvTarget) ? s.mvTarget : (tOpts[0] && tOpts[0].id);
     const mvTargets = tOpts.map((o) => ({ label: o.nombre, cls: o.id === tSel ? 'on' : '', pick: () => this.setState({ mvTarget: o.id }) }));
     const looks = LOOKS.map((L) => { const t = L[mode]; return { name: L.name, desc: L.desc, font: L.font, weight: L.weight, fstyle: L.fstyle, rad: L.rad, bg: t.bg, fg: t.fg, edge: t.edge, a0: t.a[0], a1: t.a[1], a2: t.a[2], on: lk === L.id, cls: lk === L.id ? 'on' : '', pick: () => this.pickLook(L.id) }; });
     const thIdx = { light: 0, dark: 1, auto: 2 }[D.prefs.theme] || 0;
@@ -854,6 +860,8 @@ class App extends Component {
       lg: { ahorro: short(pigTotal), meses: saved.slice(0, mI + 1).filter((v) => meta > 0 && v >= meta).length, llenos: pigs.filter((g) => g.pct >= 100).length },
       plans, plan: { n: pl.n, d: c.planD[D.plan] }, metaTxt: f(meta), metaQTxt: f(meta / 2), bars, goalH: Math.round(meta / max * c.bar[0]),
       anualTxt: f(saved.reduce((a, b) => a + b, 0) + meta * (11 - mI)), septTxt: f(savedCur), septPct: meta > 0 ? Math.min(100, Math.round(savedCur / meta * 100)) : 0, faltaSeptTxt: f(Math.max(0, meta - savedCur)),
+      sv: { mesTxt: f(savedCur), anioTxt: f(saved.reduce((a, b) => a + b, 0)), metaAnualTxt: f(meta * 12), anioPct: meta > 0 ? Math.round(saved.reduce((a, b) => a + b, 0) / (meta * 12) * 100) : 0 },
+      openAhorro: () => this.openEd('ahorro'),
       mesNombre: cap(MESL[mI]), mesLower: MESL[mI], mesCorto: MES[mI], anio: y,
       fechaLarga: cap(DIAS[now.getDay()]) + ', ' + now.getDate() + ' de ' + MESL[mI], fechaCorta: cap(DIAS[now.getDay()]).slice(0, 3) + '. ' + now.getDate() + ' ' + MES[mI] + ' ' + y,
       fechaAl: cap(DIAS[now.getDay()]) + ' ' + now.getDate() + ' · quincena ' + (now.getDate() > 15 ? 2 : 1) + ' de ' + MES[mI], edicion: mI * 2 + (now.getDate() > 15 ? 2 : 1), qRange: q.range,
@@ -861,7 +869,7 @@ class App extends Component {
       sheetOn: s.sheet, openSheet: () => this.setState({ sheet: true, mvErr: '' }), closeSheet: () => this.setState({ sheet: false, mvErr: '' }), save: () => this.saveMov(),
       addCats: ADDS.map((label, i) => ({ label, cls: s.addCat === i ? 'on' : '', pick: () => this.setState({ addCat: i, mvErr: '' }) })),
       mv: { monto: cfM > 0 ? miles(cfM) : '', nota: s.mv.nota }, mvMonto: (e) => this.setState({ mv: Object.assign({}, s.mv, { monto: e.target.value.replace(/\D/g, '') }), mvErr: '' }), mvNota: (e) => this.setState({ mv: Object.assign({}, this.state.mv, { nota: e.target.value }) }),
-      mvHasTargets: mvTargets.length > 0, mvTargets, mvTargetLbl: { tarjetas: '¿Con qué tarjeta?', vehiculos: '¿Qué vehículo?', cerditos: '¿A qué cerdito?', isub: '¿Qué tipo de ingreso?' }[map.need] || '', mvHasErr: !!s.mvErr, mvErr: s.mvErr,
+      mvHasTargets: mvTargets.length > 0, mvTargets, mvTargetLbl: { tarjetas: '¿Con qué tarjeta?', vehiculos: '¿Qué vehículo?', cerditos: '¿A qué cerdito?', isub: '¿Qué tipo de ingreso?', ahorro: '¿A dónde va?' }[map.need] || '', mvHasErr: !!s.mvErr, mvErr: s.mvErr,
       toastOn: s.toast,
       panelOn: s.panel, closePanel: () => { this.setState({ panel: false, welcome: false }); }, looks, showAcc: !s.welcome,
       apTitle: s.welcome ? 'Elige tu estilo' : 'Ajustes',
@@ -919,6 +927,15 @@ class App extends Component {
     const editing = !!ed.editId;
     if (k === 'perfil') return Object.assign(base, { title: ed.welcome ? '¡Bienvenido!' : 'Perfil', sub: ed.welcome ? 'Dos datos y empezamos. Luego proteges la app, conectas la nube y eliges el estilo.' : 'Tu nombre y tu salario estimado por quincena.', formTitle: 'Tus datos',
       fields: [fld('nombre', '¿Cómo te llamas?', { ph: 'Tu nombre', ac: 'given-name' }), money('ingresoQuincena', 'Salario estimado por quincena', { hint: 'Se usa solo en las quincenas donde no registres lo que realmente recibiste (Ajustes → Ingresos por quincena).' })], saveTxt: ed.welcome ? 'Continuar' : 'Guardar' });
+    if (k === 'ahorro') {
+      const mk = iso(new Date()).slice(0, 7), list = this.sortMovs(D.movs.filter((x) => x.tipo === 'aporte' && x.fecha.slice(0, 7) === mk));
+      const tot = list.reduce((a, x) => a + x.monto, 0);
+      return Object.assign(base, { title: 'Registrar ahorro', sub: 'Lo que guardes suma a tu meta del mes y del año. Puedes dejarlo como ahorro general o meterlo en un cerdito.', hasList: true, listTitle: 'Este mes · ' + f(tot),
+        items: list.map((x) => ({ name: (x.monto < 0 ? '− ' : '+ ') + f(Math.abs(x.monto)) + (x.nota ? ' · ' + x.nota : ''), sub: dayTxt(x.fecha) + ' · ' + (x.cerditoId ? (D.cerditos.find((g) => g.id === x.cerditoId) || { nombre: '(eliminado)' }).nombre : 'Ahorro general'), color: x.monto < 0 ? '#e5484d' : '#22b573', canEdit: false,
+          delTxt: ed.confirm === x.id ? '¿Seguro?' : 'Borrar', delCls: ed.confirm === x.id ? 'danger' : '', del: () => { if (this.state.ed.confirm !== x.id) return this.setState({ ed: Object.assign({}, this.state.ed, { confirm: x.id }) }); this.mut((d) => { d.movs = d.movs.filter((m) => m.id !== x.id); }); this.setState({ ed: Object.assign({}, this.state.ed, { confirm: null, ok: 'Borrado.' }) }); } })),
+        empty: !list.length, emptyTxt: 'Aún no registras ahorro este mes.', formTitle: 'Nuevo ahorro',
+        fields: [money('monto', '¿Cuánto guardaste?'), choice('destino', '¿A dónde va?', [['', 'Ahorro general']].concat(D.cerditos.map((g) => [g.id, g.nombre]))), fld('nota', 'Nota (opcional)', { ph: 'Ej. ahorro de la quincena' })], saveTxt: 'Guardar ahorro' });
+    }
     if (k === 'meta') return Object.assign(base, { title: 'Mi meta de ahorro', sub: 'Fija cuánto quieres guardar cada mes. Lo que abones a tus cerditos cuenta para esta meta.', formTitle: 'Meta mensual',
       fields: [money('metaMensual', '¿Cuánto quieres ahorrar al mes?', { hint: 'Tu ingreso de este mes: ' + f(this.per('m').ingreso) + '. Como referencia, el 20% sería ' + f(this.per('m').ingreso * 0.2) + '.' })], saveTxt: 'Guardar meta' });
     if (k === 'ingresos') {

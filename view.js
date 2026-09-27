@@ -205,7 +205,7 @@ ${(v.isPlan) ? html`
     ${((v.plans) || []).map((o, $index) => html`
       <button class=${"glass plan " + (o.cls)} onClick=${o.pick}><div style="font-size: 14px; font-weight: 800">${o.n}</div><div style="font-size: 11px; color: rgba(var(--fgc),.6); margin-top: 3px">${o.d}</div></button>
     `)}
-  </div>
+  </div><div class="gen-save" style="grid-column: 1 / -1"><div class="gs-row"><div style="min-width: 0"><div class="gs-lbl">Ahorrado en ${v.mesLower}</div><div class="gs-big">${v.sv.mesTxt} <span class="gs-of">de ${v.metaTxt}</span></div></div><button class="gs-btn" onClick=${v.openAhorro}>+ Registrar ahorro</button></div><div class="gs-bar"><span style=${"width: " + (v.septPct) + "%"}></span></div><div class="gs-sub">Año ${v.anio}: ${v.sv.anioTxt} de ${v.sv.metaAnualTxt} (${v.sv.anioPct}%)</div></div>
   <div class="glass st" style="border-radius: 30px; padding: 20px; animation-delay: 120ms">
     <div style="font-size: 13px; color: rgba(var(--fgc),.6)">Ahorra cada mes</div>
     <div style="font-family: 'Sora', sans-serif; font-size: 38px; font-weight: 600; letter-spacing: -1px; margin-top: 4px">${v.metaTxt}</div>
@@ -442,7 +442,7 @@ ${(v.isCerditos) ? html`
 ${(v.isPlan) ? html`
 <div class="scroll"><div class="screen" style="display: flex; flex-direction: column; gap: 14px">
   <div class="U" style="font-size: 34px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.05">Plan de<br />ahorro</div>
-  <div style="display: flex; gap: 8px">${((v.plans) || []).map((o, $index) => html`<button class=${"plan " + (o.cls)} onClick=${o.pick}><div style="font-weight: 800; font-size: 14px">${o.n}</div><div style="font-size: 11px; margin-top: 3px; opacity: .75">${o.d}</div></button>`)}</div>
+  <div style="display: flex; gap: 8px">${((v.plans) || []).map((o, $index) => html`<button class=${"plan " + (o.cls)} onClick=${o.pick}><div style="font-weight: 800; font-size: 14px">${o.n}</div><div style="font-size: 11px; margin-top: 3px; opacity: .75">${o.d}</div></button>`)}</div><div class="gen-save" style="grid-column: 1 / -1"><div class="gs-row"><div style="min-width: 0"><div class="gs-lbl">Ahorrado en ${v.mesLower}</div><div class="gs-big">${v.sv.mesTxt} <span class="gs-of">de ${v.metaTxt}</span></div></div><button class="gs-btn" onClick=${v.openAhorro}>+ Registrar ahorro</button></div><div class="gs-bar"><span style=${"width: " + (v.septPct) + "%"}></span></div><div class="gs-sub">Año ${v.anio}: ${v.sv.anioTxt} de ${v.sv.metaAnualTxt} (${v.sv.anioPct}%)</div></div>
   <div class="pop" style="border-radius: 26px; padding: 20px; background: var(--surf); border: 1px solid var(--line)">
     <div style="font-size: 12px; font-weight: 800; color: var(--mut)">META MENSUAL</div>
     <div class="U" style="font-size: 34px; font-weight: 800; letter-spacing: -1.5px; margin-top: 4px; color: var(--limet)">${v.metaTxt}</div>
@@ -655,7 +655,7 @@ ${(v.isPlan) ? html`
 <div class="scroll"><div class="screen">
   <div style="font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--mut)">Sección</div>
   <h1 class="F" style="font-size: 40px; font-weight: 300; letter-spacing: -1px; margin: 2px 0 0">El <em style="font-weight: 500">plan</em></h1>
-  <div style="display: flex; gap: 8px; margin-top: 14px">${((v.plans) || []).map((o, $index) => html`<button class=${"pill " + (o.cls)} onClick=${o.pick}>${o.n}</button>`)}</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px">${((v.plans) || []).map((o, $index) => html`<button class=${"pill " + (o.cls)} onClick=${o.pick}>${o.n}</button>`)}</div><div class="gen-save" style="grid-column: 1 / -1"><div class="gs-row"><div style="min-width: 0"><div class="gs-lbl">Ahorrado en ${v.mesLower}</div><div class="gs-big">${v.sv.mesTxt} <span class="gs-of">de ${v.metaTxt}</span></div></div><button class="gs-btn" onClick=${v.openAhorro}>+ Registrar ahorro</button></div><div class="gs-bar"><span style=${"width: " + (v.septPct) + "%"}></span></div><div class="gs-sub">Año ${v.anio}: ${v.sv.anioTxt} de ${v.sv.metaAnualTxt} (${v.sv.anioPct}%)</div></div>
   <p class="F fu" style="font-size: 22px; font-weight: 300; line-height: 1.3; margin: 16px 0 0">Guarda <em style="color: var(--t1); font-weight: 500">${v.metaTxt}</em> al mes —${v.metaQTxt} cada quincena— y cerrarás ${v.anio} con <em style="font-weight: 500">${v.anualTxt}</em>.</p>
   <div style="font-size: 13px; color: var(--mut); margin-top: 6px">${v.plan.d}</div>
   <div style="margin-top: 20px; border-top: 1.5px solid var(--ink); padding-top: 16px">
@@ -898,7 +898,7 @@ ${(v.isCerditos) ? html`
 ${(v.isPlan) ? html`
 <div class="scroll"><div class="screen" style="display: flex; flex-direction: column; gap: 14px">
   <div class="B" style="font-size: 32px; font-weight: 800; letter-spacing: -.5px">Plan de ahorro</div>
-  <div style="display: flex; gap: 10px">${((v.plans) || []).map((o, $index) => html`<button class=${"chunk plan " + (o.cls)} onClick=${o.pick}><div style="font-weight: 900; font-size: 14px">${o.n}</div><div style="font-size: 11.5px; font-weight: 800; margin-top: 2px">${o.d}</div></button>`)}</div>
+  <div style="display: flex; gap: 10px">${((v.plans) || []).map((o, $index) => html`<button class=${"chunk plan " + (o.cls)} onClick=${o.pick}><div style="font-weight: 900; font-size: 14px">${o.n}</div><div style="font-size: 11.5px; font-weight: 800; margin-top: 2px">${o.d}</div></button>`)}</div><div class="gen-save" style="grid-column: 1 / -1"><div class="gs-row"><div style="min-width: 0"><div class="gs-lbl">Ahorrado en ${v.mesLower}</div><div class="gs-big">${v.sv.mesTxt} <span class="gs-of">de ${v.metaTxt}</span></div></div><button class="gs-btn" onClick=${v.openAhorro}>+ Registrar ahorro</button></div><div class="gs-bar"><span style=${"width: " + (v.septPct) + "%"}></span></div><div class="gs-sub">Año ${v.anio}: ${v.sv.anioTxt} de ${v.sv.metaAnualTxt} (${v.sv.anioPct}%)</div></div>
   <div class="oc chunk pop" style="background: #3cc59a; padding: 18px; border-radius: 28px">
     <div style="font-size: 12.5px; font-weight: 900">GUARDA CADA MES</div>
     <div class="B" style="font-size: 34px; font-weight: 800">${v.metaTxt}</div>
