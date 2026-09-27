@@ -190,7 +190,7 @@ ${(v.isCerditos) ? html`
       <div style="height: 12px; border-radius: 99px; background: rgba(var(--wc),.07); margin-top: 14px; overflow: hidden"><div class="fill" style=${"height: 100%; width: " + (g.pct) + "%; border-radius: 99px; background: " + (g.color) + "; box-shadow: 0 0 16px " + (g.color)}></div></div>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px">
         <span style="font-size: 13px; color: rgba(var(--fgc),.7)"><b style="color: var(--strong)">${g.amt}</b> · faltan ${g.faltan}</span>
-        <button onClick=${g.add} class="chip">+ $ 50 mil</button>
+        <button onClick=${g.open} class="chip">Abonar</button>
       </div>
     </div>
   `)}
@@ -429,7 +429,7 @@ ${(v.isCerditos) ? html`
           <div><div class="U" style="font-size: 30px; font-weight: 800; letter-spacing: -1.5px; mix-blend-mode: difference; color: #f3f2ea">${g.pctTxt}</div><div style="font-weight: 800; font-size: 14px; margin-top: 4px; mix-blend-mode: difference; color: #f3f2ea">${g.name}</div></div>
           <div>
             <div style="font-size: 12px; font-weight: 800; color: #0f0f0d; background: rgba(243,242,234,.92); display: inline-block; padding: 3px 7px; border-radius: 6px">${g.amt}</div>
-            <button onClick=${g.add} style="margin-top: 8px; width: 100%; height: 44px; border-radius: 14px; background: #0f0f0d; color: #f3f2ea; font-weight: 800; font-size: 13.5px">+ 50 mil</button>
+            <button onClick=${g.open} style="margin-top: 8px; width: 100%; height: 44px; border-radius: 14px; background: #0f0f0d; color: #f3f2ea; font-weight: 800; font-size: 13.5px">ABONAR</button>
           </div>
         </div>
       </div>
@@ -643,7 +643,7 @@ ${(v.isCerditos) ? html`
       <div class="fu" style=${"padding: 16px 0; border-bottom: 1px solid var(--r1); animation-delay: " + (g.delay) + "ms"}>
         <div style="display: flex; justify-content: space-between; align-items: baseline"><span class="F" style="font-size: 20px">${g.name}</span><span class="F" style=${"font-size: 26px; font-style: italic; color: " + (g.color)}>${g.pctTxt}</span></div>
         <div class="thin" style="height: 8px; margin-top: 10px"><div class="fill" style=${"height: 100%; width: " + (g.pct) + "%; background: " + (g.color)}></div></div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px"><span style="font-size: 13px; color: var(--body)">${g.amt} de ${g.goal} · ${g.when}</span><button class="pill" onClick=${g.add}>+ $ 50 mil</button></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px"><span style="font-size: 13px; color: var(--body)">${g.amt} de ${g.goal} · ${g.when}</span><button class="pill" onClick=${g.open}>Abonar</button></div>
       </div>
     `)}
   </div>
@@ -886,7 +886,7 @@ ${(v.isCerditos) ? html`
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 8px">
           <span style="font-weight: 900; font-size: 13.5px; line-height: 1.2">${g.name}</span>
-          <button class="oc chunk" onClick=${g.add} aria-label="Agregar 50 mil" style="width: 44px; height: 44px; border-radius: 14px; background: #ffc94d; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 var(--line)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2b2140" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button>
+          <button class="oc chunk" onClick=${g.open} aria-label="Abonar al cerdito" style="width: 44px; height: 44px; border-radius: 14px; background: #ffc94d; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 var(--line)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2b2140" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button>
         </div>
       </div>
     `)}
@@ -1231,6 +1231,53 @@ ${(v.lockOn) ? html`
       ${((v.lk.keys) || []).map((ky, $index) => html`<button class=${"lk-key " + (ky.cls)} onClick=${ky.press} aria-label=${ky.aria}>${ky.label}</button>`)}
     </div>
     ${(v.lk.hasBio) ? html`<button class="lk-bio" onClick=${v.lk.bio}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 11v3M8.5 8.5A5 5 0 0 1 17 12v1M7 12a5 5 0 0 0 .5 2.2M12 5a7 7 0 0 1 7 7v1M5 12a7 7 0 0 1 3-5.7M9.5 18a8 8 0 0 0 1.5-4M14.5 17.5a11 11 0 0 0 .5-3.5"></path></svg>Usar huella / Face ID</button>` : null}
+  </div>
+` : null}
+
+${(v.pigOn) ? html`
+  <div class="ap-scrim" onClick=${v.pg.close}></div>
+  <div class="ap tall" role="dialog" aria-label=${"Cerdito " + (v.pg.name)}>
+    <div style="width: 40px; height: 5px; border-radius: 9px; background: var(--apline); margin: 0 auto 12px; flex-shrink: 0"></div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-shrink: 0">
+      <div style="min-width: 0"><div style="font-family: 'Sora', sans-serif; font-size: 21px; font-weight: 600">${v.pg.name}</div><div style="font-size: 13px; color: var(--apmut); margin-top: 3px">${v.pg.amt} de ${v.pg.goal} · ${v.pg.when}</div></div>
+      <button onClick=${v.pg.close} aria-label="Cerrar" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: var(--apcard); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="as-scroll">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px"><span style="font-family: 'Sora', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -.5px">${v.pg.pctTxt}</span><span style="font-size: 13px; color: var(--apmut)">faltan ${v.pg.faltan}</span></div>
+      <div class="pw-meter" style="height: 12px"><span style=${"width: " + (v.pg.pct) + "%; background: #22b573"}></span></div>
+
+      <div class="ap-lbl">Abonar o retirar</div>
+      <label class="ap-fl" for="pg-monto" style="margin-top: 0">Monto</label>
+      <input id="pg-monto" class="ap-in" inputmode="numeric" placeholder="$ 0" value=${v.pg.monto} onInput=${v.pg.setMonto} style="font-size: 22px; height: 56px" />
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px">${((v.pg.quick) || []).map((qq, $index) => html`<button class="ap-chip" onClick=${qq.pick}>${qq.label}</button>`)}</div>
+      <label class="ap-fl" for="pg-nota">Nota (opcional)</label>
+      <input id="pg-nota" class="ap-in" placeholder="Ej. prima de junio" value=${v.pg.nota} onInput=${v.pg.setNota} />
+      ${(v.pg.hasErr) ? html`<div class="ap-err">${v.pg.err}</div>` : null}
+      ${(v.pg.hasOk) ? html`<div class="ap-ok">${v.pg.ok}</div>` : null}
+      <div style="display: flex; gap: 8px; margin-top: 12px"><button class="ap-go" style="margin-top: 0" onClick=${v.pg.abonar}>Abonar</button><button class="ap-alt" style="margin-top: 0; height: 54px" onClick=${v.pg.retirar}>Retirar</button></div>
+
+      <div class="ap-lbl">Historial</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        ${((v.pg.movs) || []).map((pm, $index) => html`
+          <div class="ed-item">
+            <span style=${"width: 10px; height: 36px; border-radius: 6px; flex-shrink: 0; background: " + (pm.color)}></span>
+            <div style="flex: 1; min-width: 0"><div style="font-weight: 800; font-size: 14.5px">${pm.vTxt}</div><div style="font-size: 12px; color: var(--apmut); margin-top: 2px">${pm.sub}</div></div>
+            <button class=${"ed-btn " + (pm.delCls)} onClick=${pm.del} aria-label="Eliminar movimiento">${pm.delTxt}</button>
+          </div>
+        `)}
+      </div>
+      ${(v.pg.noMovs) ? html`<div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">Aún no hay abonos.</div>` : null}
+
+      <div class="ap-lbl">Editar cerdito</div>
+      <label class="ap-fl" for="pg-nombre" style="margin-top: 0">Nombre</label>
+      <input id="pg-nombre" class="ap-in" value=${v.pg.fNombre} onInput=${v.pg.setNombre} />
+      <label class="ap-fl" for="pg-meta">Meta de ahorro</label>
+      <input id="pg-meta" class="ap-in" inputmode="numeric" placeholder="$ 0" value=${v.pg.fMeta} onInput=${v.pg.setMeta} />
+      <label class="ap-fl" for="pg-fecha">Meta para (opcional)</label>
+      <input id="pg-fecha" class="ap-in" type="month" value=${v.pg.fFecha} onInput=${v.pg.setFecha} />
+      <button class="ap-go" onClick=${v.pg.guardar}>Guardar cambios</button>
+      <button class="ap-alt danger-t" onClick=${v.pg.eliminar}>${v.pg.delPigTxt}</button>
+    </div>
   </div>
 ` : null}
 </div>`;

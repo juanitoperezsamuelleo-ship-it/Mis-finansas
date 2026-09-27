@@ -104,3 +104,50 @@
     <sc-if value="{{lk.hasBio}}" hint-placeholder-val="{{false}}"><button class="lk-bio" onClick="{{lk.bio}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 11v3M8.5 8.5A5 5 0 0 1 17 12v1M7 12a5 5 0 0 0 .5 2.2M12 5a7 7 0 0 1 7 7v1M5 12a7 7 0 0 1 3-5.7M9.5 18a8 8 0 0 0 1.5-4M14.5 17.5a11 11 0 0 0 .5-3.5"></path></svg>Usar huella / Face ID</button></sc-if>
   </div>
 </sc-if>
+
+<sc-if value="{{pigOn}}" hint-placeholder-val="{{false}}">
+  <div class="ap-scrim" onClick="{{pg.close}}"></div>
+  <div class="ap tall" role="dialog" aria-label="Cerdito {{pg.name}}">
+    <div style="width: 40px; height: 5px; border-radius: 9px; background: var(--apline); margin: 0 auto 12px; flex-shrink: 0"></div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-shrink: 0">
+      <div style="min-width: 0"><div style="font-family: 'Sora', sans-serif; font-size: 21px; font-weight: 600">{{pg.name}}</div><div style="font-size: 13px; color: var(--apmut); margin-top: 3px">{{pg.amt}} de {{pg.goal}} · {{pg.when}}</div></div>
+      <button onClick="{{pg.close}}" aria-label="Cerrar" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: var(--apcard); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="as-scroll">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px"><span style="font-family: 'Sora', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -.5px">{{pg.pctTxt}}</span><span style="font-size: 13px; color: var(--apmut)">faltan {{pg.faltan}}</span></div>
+      <div class="pw-meter" style="height: 12px"><span style="width: {{pg.pct}}%; background: #22b573"></span></div>
+
+      <div class="ap-lbl">Abonar o retirar</div>
+      <label class="ap-fl" for="pg-monto" style="margin-top: 0">Monto</label>
+      <input id="pg-monto" class="ap-in" inputmode="numeric" placeholder="$ 0" value="{{pg.monto}}" onChange="{{pg.setMonto}}" style="font-size: 22px; height: 56px">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px"><sc-for list="{{pg.quick}}" as="qq" hint-placeholder-count="4"><button class="ap-chip" onClick="{{qq.pick}}">{{qq.label}}</button></sc-for></div>
+      <label class="ap-fl" for="pg-nota">Nota (opcional)</label>
+      <input id="pg-nota" class="ap-in" placeholder="Ej. prima de junio" value="{{pg.nota}}" onChange="{{pg.setNota}}">
+      <sc-if value="{{pg.hasErr}}" hint-placeholder-val="{{false}}"><div class="ap-err">{{pg.err}}</div></sc-if>
+      <sc-if value="{{pg.hasOk}}" hint-placeholder-val="{{false}}"><div class="ap-ok">{{pg.ok}}</div></sc-if>
+      <div style="display: flex; gap: 8px; margin-top: 12px"><button class="ap-go" style="margin-top: 0" onClick="{{pg.abonar}}">Abonar</button><button class="ap-alt" style="margin-top: 0; height: 54px" onClick="{{pg.retirar}}">Retirar</button></div>
+
+      <div class="ap-lbl">Historial</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <sc-for list="{{pg.movs}}" as="pm" hint-placeholder-count="3">
+          <div class="ed-item">
+            <span style="width: 10px; height: 36px; border-radius: 6px; flex-shrink: 0; background: {{pm.color}}"></span>
+            <div style="flex: 1; min-width: 0"><div style="font-weight: 800; font-size: 14.5px">{{pm.vTxt}}</div><div style="font-size: 12px; color: var(--apmut); margin-top: 2px">{{pm.sub}}</div></div>
+            <button class="ed-btn {{pm.delCls}}" onClick="{{pm.del}}" aria-label="Eliminar movimiento">{{pm.delTxt}}</button>
+          </div>
+        </sc-for>
+      </div>
+      <sc-if value="{{pg.noMovs}}" hint-placeholder-val="{{false}}"><div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">Aún no hay abonos.</div></sc-if>
+
+      <div class="ap-lbl">Editar cerdito</div>
+      <label class="ap-fl" for="pg-nombre" style="margin-top: 0">Nombre</label>
+      <input id="pg-nombre" class="ap-in" value="{{pg.fNombre}}" onChange="{{pg.setNombre}}">
+      <label class="ap-fl" for="pg-meta">Meta de ahorro</label>
+      <input id="pg-meta" class="ap-in" inputmode="numeric" placeholder="$ 0" value="{{pg.fMeta}}" onChange="{{pg.setMeta}}">
+      <label class="ap-fl" for="pg-fecha">Meta para (opcional)</label>
+      <input id="pg-fecha" class="ap-in" type="month" value="{{pg.fFecha}}" onChange="{{pg.setFecha}}">
+      <button class="ap-go" onClick="{{pg.guardar}}">Guardar cambios</button>
+      <button class="ap-alt danger-t" onClick="{{pg.eliminar}}">{{pg.delPigTxt}}</button>
+    </div>
+  </div>
+</sc-if>

@@ -74,6 +74,10 @@ R = [
     ('>GASTO GUARDADO<', '>GUARDADO<'),
     ('para ti con los datos de esta quincena.', 'para ti con tus datos de hoy.'),
     ('>Apariencia<', '>{{apTitle}}<'),
+    ('+ $ 50 mil', 'Abonar'),
+    ('>+ 50 mil<', '>ABONAR<'),
+    ('Agregar 50 mil', 'Abonar al cerdito'),
+    ('onClick="{{g.add}}"', 'onClick="{{g.open}}"'),
 ]
 for a, b in R:
     mk = rep_all(mk, a, b, must=('>Apariencia<' not in a))

@@ -66,17 +66,17 @@ const TIPO_NAME = { gasto: 'Gasto', ingreso: 'Ingreso', aporte: 'Ahorro', pagoTa
 const CFG = {
   nb: { splash: [2400, 2950], periods: ['15 días', 'Mes', 'Año'], subs: ['Todo', 'Tarjetas', 'Vehículo'],
     cat: ['var(--a1)', 'var(--a2)', 'var(--a3)', 'var(--a4)'], pig: ['var(--a1)', 'var(--a2)', 'var(--a3)', 'var(--a4)'], cred: ['var(--a2)', 'var(--a3)', 'var(--a1)', 'var(--a4)'],
-    catW: 'pct', bar: [120, 6], vPre: 'minus', planD: { con: '10% del ingreso', bal: '20% · 50/30/20', amb: '30% del ingreso' },
+    catW: 'pct', bar: [120, 6], vPre: 'minus', planD: { con: '10% del ingreso', bal: '20% · 50/30/20', amb: '30% del ingreso', custom: 'Tú eliges el monto' },
     tjBg: ['linear-gradient(135deg, rgba(var(--a2c),.5), rgba(var(--a2c),.14))', 'linear-gradient(135deg, rgba(var(--a1c),.45), rgba(var(--a1c),.12))', 'linear-gradient(135deg, rgba(var(--a3c),.45), rgba(var(--a3c),.12))'], tjSolid: [''] },
   vt: { splash: [2400, 3050], periods: ['15D', 'MES', 'AÑO'], subs: ['Todo', 'Tarjetas', 'Vehículo'],
     cat: ['#d6ff3d', '#e9e4d4', '#ff6b3d', '#7aa7ff'], pig: ['#d6ff3d', '#7aa7ff', '#ff6b3d', '#e9e4d4'], cred: ['#ff6b3d', '#7aa7ff', '#d6ff3d', '#e9e4d4'],
-    catW: 'grow', bar: [124, 6], vPre: 'minus2', planD: { con: '10%', bal: '20% · 50/30/20', amb: '30%' }, tjBg: [''], tjSolid: ['#e9e4d4', '#7aa7ff', '#d6ff3d'] },
+    catW: 'grow', bar: [124, 6], vPre: 'minus2', planD: { con: '10%', bal: '20% · 50/30/20', amb: '30%', custom: 'TÚ ELIGES' }, tjBg: [''], tjSolid: ['#e9e4d4', '#7aa7ff', '#d6ff3d'] },
   lb: { splash: [2500, 3250], periods: ['Quincena', 'Mes', 'Año'], subs: ['Todo', 'Tarjetas', 'Vehículo'],
     cat: ['var(--t1)', 'var(--t2)', 'var(--t3)', 'var(--t4)'], pig: ['var(--t1)', 'var(--t2)', 'var(--t3)', 'var(--t4)'], cred: ['var(--t1)', 'var(--t2)', 'var(--t3)', 'var(--t4)'],
-    catW: 'rel', bar: [126, 6], vPre: 'none', planD: { con: 'Plan suave: el 10% de lo que entra.', bal: 'Plan balanceado: regla 50/30/20.', amb: 'Plan intenso: el 30% de lo que entra.' }, tjBg: [''], tjSolid: [''] },
+    catW: 'rel', bar: [126, 6], vPre: 'none', planD: { con: 'Plan suave: el 10% de lo que entra.', bal: 'Plan balanceado: regla 50/30/20.', amb: 'Plan intenso: el 30% de lo que entra.', custom: 'Plan propio: tú fijas cuánto guardar cada mes.' }, tjBg: [''], tjSolid: [''] },
   al: { splash: [2800, 3500], periods: ['15 días', 'Mes', 'Año'], subs: ['Todo', 'Tarjetas', 'Vehículo'],
     cat: ['#ffc94d', '#6fa8ff', '#3cc59a', '#b79cff'], pig: ['#6fa8ff', '#3cc59a', '#ffc94d', '#ff6f91'], cred: ['#ff6f91', '#6fa8ff', '#3cc59a', '#ffc94d'],
-    catW: 'rel', bar: [122, 8], vPre: 'none', planD: { con: '10%', bal: '20%', amb: '30%' }, tjBg: [''], tjSolid: ['#6fa8ff', '#b79cff', '#3cc59a'] }
+    catW: 'rel', bar: [122, 8], vPre: 'none', planD: { con: '10%', bal: '20%', amb: '30%', custom: 'Tú eliges' }, tjBg: [''], tjSolid: ['#6fa8ff', '#b79cff', '#3cc59a'] }
 };
 const LOOKS = [
   { id: 'nb', name: 'Nimbo', desc: 'Vidrio y luz', font: "'Sora', sans-serif", weight: 600, fstyle: 'normal', rad: '50%',
@@ -88,7 +88,7 @@ const LOOKS = [
   { id: 'al', name: 'Alcancía', desc: 'Táctil y jugable', font: "'Bricolage Grotesque', sans-serif", weight: 800, fstyle: 'normal', rad: '4px',
     dark: { bg: '#1b1429', fg: '#fff4e6', edge: '#07040d', a: ['#ffc94d', '#ff6f91', '#3cc59a'] }, light: { bg: '#fff4e6', fg: '#2b2140', edge: '#2b2140', a: ['#ffc94d', '#ff6f91', '#3cc59a'] } }
 ];
-const PLANS = { con: { n: 'Suave', p: 0.10 }, bal: { n: 'Balanceado', p: 0.20 }, amb: { n: 'Intenso', p: 0.30 } };
+const PLANS = { con: { n: 'Suave', p: 0.10 }, bal: { n: 'Balanceado', p: 0.20 }, amb: { n: 'Intenso', p: 0.30 }, custom: { n: 'Mi meta', p: null } };
 
 /* ============ créditos ============ */
 function credCalc(c, today) {
@@ -146,7 +146,7 @@ class App extends Component {
   }
   relock() {
     this.dek = null; clearTimeout(this.tp);
-    this.setState({ locked: true, data: blank(), lockPin: '', sheet: false, panel: false, ed: null, asist: false, cred: false, movSel: null, splash: false });
+    this.setState({ locked: true, data: blank(), lockPin: '', pigSel: null, pg: null, sheet: false, panel: false, ed: null, asist: false, cred: false, movSel: null, splash: false });
     this.bioTried = false; this.lockPrompt();
   }
   afterUnlock(res) {
@@ -261,7 +261,7 @@ class App extends Component {
   itemOf(x, c) {
     const D = this.state.data, name = (arr, id) => { const o = arr.find((z) => z.id === id); return o ? o.nombre : '(eliminado)'; };
     let t = x.nota, dest = '';
-    if (x.tipo === 'aporte') { dest = name(D.cerditos, x.cerditoId); t = t || 'Aporte a ' + dest; }
+    if (x.tipo === 'aporte') { dest = name(D.cerditos, x.cerditoId); t = (x.nota ? x.nota + ' · ' : (x.monto < 0 ? 'Retiro de ' : 'Aporte a ')) + dest; }
     else if (x.tipo === 'pagoTarjeta') { dest = name(D.tarjetas, x.tarjetaId); t = t || 'Pago de ' + dest; }
     else if (x.tipo === 'ingreso') { t = t || ISUB[x.sub] || 'Ingreso'; dest = ISUB[x.sub] || 'Otros ingresos'; }
     else {
@@ -272,7 +272,7 @@ class App extends Component {
     const today = iso(new Date()), yest = iso(new Date(Date.now() - 864e5));
     const dt = x.fecha === today ? 'Hoy' : (x.fecha === yest ? 'Ayer' : dayTxt(x.fecha));
     const hr = x.ts && x.fecha === today ? ' · ' + pad(new Date(x.ts).getHours()) + ':' + pad(new Date(x.ts).getMinutes()) : '';
-    const sign = x.tipo === 'ingreso' ? '+' : (x.tipo === 'aporte' ? '→' : '−');
+    const sign = x.tipo === 'ingreso' ? '+' : (x.tipo === 'aporte' ? (x.monto < 0 ? '←' : '→') : '−');
     const vTxt = c.vPre === 'minus' ? sign + ' ' + fmt(x.monto) : (c.vPre === 'minus2' ? sign + fmt(x.monto).slice(1) : (sign === '−' ? fmt(x.monto) : sign + ' ' + fmt(x.monto)));
     const cat = x.tipo === 'aporte' ? 'Cerdito' : (x.tipo === 'ingreso' ? 'Ingreso' : (x.tipo === 'pagoTarjeta' ? 'Pago tarjeta' : CAT_NAME[x.cat]));
     const ci = x.tipo === 'gasto' ? CAT_IDX[x.cat] : (x.tipo === 'aporte' ? 0 : 3);
@@ -305,7 +305,7 @@ class App extends Component {
       tarjetas: { nombre: '', ult4: '', cupo: '', usadoInicial: '', corte: '', pago: '' },
       vehiculos: { nombre: '', tipo: 'moto', km: '', aceiteKm: '', aceiteCada: '', soat: '' },
       cerditos: { nombre: '', meta: '', inicial: '', fecha: '' },
-      creditos: {}, datos: {}, seguridad: { pin: '', pin2: '', pinOld: '' },
+      creditos: {}, datos: {}, meta: { metaMensual: this.state.data.metaMensual ? String(this.state.data.metaMensual) : '' }, seguridad: { pin: '', pin2: '', pinOld: '' },
       ingresos: this.incForm(qk(iso(new Date())))
     }[kind];
   }
@@ -321,6 +321,11 @@ class App extends Component {
       return this.setState({ ed: null });
     }
     if (k === 'creditos') return this.setState({ ed: null, cred: true });
+    if (k === 'meta') {
+      if (!(num(f.metaMensual) > 0)) return err('Escribe cuánto quieres ahorrar al mes.');
+      this.mut((d) => { d.metaMensual = num(f.metaMensual); d.plan = 'custom'; });
+      return this.setState({ ed: null });
+    }
     if (k === 'ingresos') {
       const key = f.q, [from] = qBounds(key), cur = this.qIncome(key).by;
       const today = new Date(), fecha = qk(iso(today)) === key ? iso(today) : iso(from);
@@ -405,6 +410,56 @@ class App extends Component {
     if (!ed.confirmOff) return this.setState({ ed: Object.assign({}, ed, { confirmOff: true, err: 'Escribe tu PIN actual y toca de nuevo "Quitar bloqueo". Tus datos quedarán sin cifrar en el teléfono.' }) });
     try { const data = await lock.disable(pin); this.dek = null; saveLocal(normalize(data)); this.setState({ ed: Object.assign({}, this.state.ed, { confirmOff: false, err: '', ok: 'Bloqueo desactivado.' }) }); }
     catch (e) { this.setState({ ed: Object.assign({}, this.state.ed, { err: 'PIN incorrecto.' }) }); }
+  }
+  openPig(id) {
+    const g = this.state.data.cerditos.find((x) => x.id === id); if (!g) return;
+    this.setState({ pigSel: id, pg: { monto: '', nota: '', nombre: g.nombre, meta: String(g.meta || ''), fecha: g.fecha || '', err: '', ok: '', confirmDel: false, confirmMov: null }, sheet: false, panel: false, ed: null });
+  }
+  setPg(o) { this.setState({ pg: Object.assign({}, this.state.pg, o) }); }
+  pigMove(sign) {
+    const pg = this.state.pg, id = this.state.pigSel, monto = num(pg.monto);
+    if (!(monto > 0)) return this.setPg({ err: 'Escribe el monto.', ok: '' });
+    const g = this.state.data.cerditos.find((x) => x.id === id);
+    if (sign < 0) {
+      const saldo = (g.inicial || 0) + this.state.data.movs.filter((x) => x.tipo === 'aporte' && x.cerditoId === id).reduce((a, x) => a + x.monto, 0);
+      if (monto > saldo) return this.setPg({ err: 'No puedes retirar más de lo ahorrado (' + fmt(saldo) + ').', ok: '' });
+    }
+    this.mut((d) => d.movs.push({ id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: 'aporte', cat: 'cerdito', monto: sign * monto, nota: pg.nota.trim() || (sign > 0 ? 'Abono' : 'Retiro'), cerditoId: id }));
+    this.setPg({ monto: '', nota: '', err: '', ok: (sign > 0 ? 'Abonaste ' : 'Retiraste ') + fmt(monto) + '.' });
+  }
+  pigSave() {
+    const pg = this.state.pg, id = this.state.pigSel;
+    if (!pg.nombre.trim()) return this.setPg({ err: 'El cerdito necesita un nombre.', ok: '' });
+    if (!(num(pg.meta) > 0)) return this.setPg({ err: 'Escribe la meta de ahorro.', ok: '' });
+    this.mut((d) => { d.cerditos = d.cerditos.map((x) => (x.id === id ? Object.assign({}, x, { nombre: pg.nombre.trim(), meta: num(pg.meta), fecha: pg.fecha || '' }) : x)); });
+    this.setPg({ err: '', ok: 'Cambios guardados.' });
+  }
+  pigDelete() {
+    const pg = this.state.pg, id = this.state.pigSel;
+    if (!pg.confirmDel) return this.setPg({ confirmDel: true, err: 'Toca otra vez para eliminar el cerdito. Sus abonos se borrarán del historial.', ok: '' });
+    this.mut((d) => { d.cerditos = d.cerditos.filter((x) => x.id !== id); d.movs = d.movs.filter((x) => !(x.tipo === 'aporte' && x.cerditoId === id)); }, { recount: true });
+    this.setState({ pigSel: null, pg: null });
+  }
+  pigView() {
+    const s = this.state, D = s.data, id = s.pigSel, g = D.cerditos.find((x) => x.id === id), pg = s.pg;
+    if (!g || !pg) return null;
+    const ap = this.sortMovs(D.movs.filter((x) => x.tipo === 'aporte' && x.cerditoId === id));
+    const amt = (g.inicial || 0) + ap.reduce((a, x) => a + x.monto, 0), pct = g.meta > 0 ? Math.max(0, Math.min(100, Math.round(amt / g.meta * 100))) : 0;
+    const quick = [50000, 100000, 200000, 500000].map((v) => ({ label: short(v).replace('K', ' mil').replace('M', ' M'), pick: () => this.setPg({ monto: String(v), err: '' }) }));
+    const n = (v) => num(v);
+    return { name: g.nombre, amt: fmt(amt), goal: fmt(g.meta), when: g.fecha ? MES[+g.fecha.slice(5, 7) - 1] + ' ' + g.fecha.slice(0, 4) : 'sin fecha', pct, pctTxt: pct + '%', faltan: fmt(Math.max(0, g.meta - amt)),
+      monto: n(pg.monto) > 0 ? miles(n(pg.monto)) : '', nota: pg.nota, quick,
+      setMonto: (e) => this.setPg({ monto: e.target.value.replace(/\D/g, ''), err: '', ok: '' }), setNota: (e) => this.setPg({ nota: e.target.value }),
+      abonar: () => this.pigMove(1), retirar: () => this.pigMove(-1),
+      hasErr: !!pg.err, err: pg.err, hasOk: !!pg.ok, ok: pg.ok,
+      movs: ap.slice(0, 40).map((x) => ({ vTxt: (x.monto < 0 ? '− ' : '+ ') + fmt(Math.abs(x.monto)) + (x.nota ? ' · ' + x.nota : ''), sub: dayTxt(x.fecha) + ' ' + x.fecha.slice(0, 4), color: x.monto < 0 ? '#e5484d' : '#22b573',
+        delTxt: pg.confirmMov === x.id ? '¿Seguro?' : 'Borrar', delCls: pg.confirmMov === x.id ? 'danger' : '',
+        del: () => { if (this.state.pg.confirmMov !== x.id) return this.setPg({ confirmMov: x.id }); this.mut((d) => { d.movs = d.movs.filter((m) => m.id !== x.id); }); this.setPg({ confirmMov: null, ok: 'Movimiento borrado.', err: '' }); } })),
+      noMovs: !ap.length && !(g.inicial > 0),
+      fNombre: pg.nombre, fMeta: n(pg.meta) > 0 ? miles(n(pg.meta)) : '', fFecha: pg.fecha,
+      setNombre: (e) => this.setPg({ nombre: e.target.value, err: '', ok: '' }), setMeta: (e) => this.setPg({ meta: e.target.value.replace(/\D/g, ''), err: '', ok: '' }), setFecha: (e) => this.setPg({ fecha: e.target.value, ok: '' }),
+      guardar: () => this.pigSave(), eliminar: () => this.pigDelete(), delPigTxt: pg.confirmDel ? 'Confirmar: eliminar cerdito' : 'Eliminar cerdito',
+      close: () => this.setState({ pigSel: null, pg: null }) };
   }
   closeEd() {
     const ed = this.state.ed;
@@ -514,8 +569,11 @@ class App extends Component {
           if (f.password !== f.password2) return err('Las contraseñas no coinciden.');
           const res = await this.sb.auth.signUp({ email, password: f.password });
           if (res.error) return err(this.errTxt(res.error));
-          if (!res.data.session) return err('La cuenta se creó, pero Supabase pide confirmar el correo. Desactiva "Confirm email" en Authentication → Providers → Email y luego toca Entrar.');
-          this.session = res.data.session;
+          if (!res.data.session) {
+            const li = await this.sb.auth.signInWithPassword({ email, password: f.password });
+            if (li.error) return err('Tu usuario se creó. Toca "Entrar" para continuar.');
+            this.session = li.data.session;
+          } else this.session = res.data.session;
         } else {
           if (!f.password) return err('Escribe tu contraseña.');
           const res = await this.sb.auth.signInWithPassword({ email, password: f.password });
@@ -707,17 +765,17 @@ class App extends Component {
       const ap = D.movs.filter((x) => x.tipo === 'aporte' && x.cerditoId === g.id);
       const amt = (g.inicial || 0) + ap.reduce((a, x) => a + x.monto, 0), pct = g.meta > 0 ? Math.min(100, Math.round(amt / g.meta * 100)) : 0;
       const rate = ap.filter((x) => x.fecha >= since90).reduce((a, x) => a + x.monto, 0) / 6;
-      return { name: g.nombre, when: g.fecha ? MES[+g.fecha.slice(5, 7) - 1] + ' ' + g.fecha.slice(0, 4) : 'sin fecha', amt: f(amt), goal: f(g.meta), pct, pctTxt: pct + '%', faltaN: Math.max(0, g.meta - amt), faltan: f(Math.max(0, g.meta - amt)), level: 100 - pct, rate, amtN: amt,
+      return { id: g.id, open: () => this.openPig(g.id), name: g.nombre, when: g.fecha ? MES[+g.fecha.slice(5, 7) - 1] + ' ' + g.fecha.slice(0, 4) : 'sin fecha', amt: f(amt), goal: f(g.meta), pct, pctTxt: pct + '%', faltaN: Math.max(0, g.meta - amt), faltan: f(Math.max(0, g.meta - amt)), level: 100 - pct, rate, amtN: amt,
         color: c.pig[i % c.pig.length], delay: 100 + i * 90,
         add: () => { this.mut((d) => d.movs.push({ id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: 'aporte', cat: 'cerdito', monto: 50000, nota: 'Aporte rápido', cerditoId: g.id })); } };
     });
     const pigTotal = pigs.reduce((a, g) => a + g.amtN, 0);
     // plan
-    const pl = PLANS[D.plan] || PLANS.bal, ingresoMes = this.per('m').ingreso, meta = Math.round(ingresoMes * pl.p);
+    const pl = PLANS[D.plan] || PLANS.bal, ingresoMes = this.per('m').ingreso, meta = D.plan === 'custom' ? Math.round(D.metaMensual || 0) : Math.round(ingresoMes * pl.p);
     const saved = Array.from({ length: 12 }, (_, i) => D.movs.filter((x) => x.tipo === 'aporte' && x.fecha.slice(0, 7) === y + '-' + pad(i + 1)).reduce((a, x) => a + x.monto, 0));
     const max = Math.max.apply(null, saved.concat([meta, 1]));
     const bars = MES.map((m, i) => { const real = i <= mI, v = real ? saved[i] : meta; return { m: m.charAt(0).toUpperCase(), h: Math.max(c.bar[1], Math.round(v / max * c.bar[0])), cls: real ? (i === mI ? 'bar real cur' : 'bar real') : 'bar proj', delay: 80 + i * 45 }; });
-    const plans = Object.keys(PLANS).map((id) => ({ n: PLANS[id].n, d: c.planD[id], cls: D.plan === id ? 'on' : '', pick: () => this.mut((d) => { d.plan = id; }) }));
+    const plans = Object.keys(PLANS).map((id) => ({ n: id === 'custom' && D.metaMensual ? 'Mi meta' : PLANS[id].n, d: id === 'custom' && D.metaMensual ? fmt(D.metaMensual) + '/mes' : c.planD[id], cls: D.plan === id ? 'on' : '', pick: () => { this.mut((d) => { d.plan = id; }); if (id === 'custom') this.openEd('meta'); } }));
     const savedCur = saved[mI];
     // créditos
     const credx = D.creditos.map((cr) => ({ c: cr, x: credCalc(cr, now) }));
@@ -814,6 +872,7 @@ class App extends Component {
       sync: this.syncView(), syncNow: () => this.pull(), logout: () => this.logout(), exportData: () => this.exportData(), importData: (e) => this.importData(e), skipCloud: () => { this.setState({ ed: null }); this.finishWelcome(); },
       movOn: !!movD, movD: movD || {}, closeMov: () => this.setState({ movSel: null, movConfirm: false }),
       logoutAll: () => this.logout(true),
+      pigOn: !!this.pigView(), pg: this.pigView() || {},
       lockOn: s.locked, lk: { title: 'Mis Finanzas', msg: s.lockMsg, msgCls: s.lockErr ? 'err' : '', hasBio: lock.hasBio(), bio: () => this.unlockBio(),
         dots: [0, 1, 2, 3, 4, 5].map((i) => ({ cls: i < s.lockPin.length ? 'on' : '' })),
         keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((k) => ({ label: k === 'del' ? '⌫' : k, aria: k === 'del' ? 'Borrar' : (k ? 'Número ' + k : ''), cls: k === '' ? 'hide' : (k === 'del' ? 'ghost' : ''), press: () => k && this.pressKey(k) })) }
@@ -839,6 +898,8 @@ class App extends Component {
     const editing = !!ed.editId;
     if (k === 'perfil') return Object.assign(base, { title: ed.welcome ? '¡Bienvenido!' : 'Perfil', sub: ed.welcome ? 'Dos datos y empezamos. Luego proteges la app, conectas la nube y eliges el estilo.' : 'Tu nombre y tu salario estimado por quincena.', formTitle: 'Tus datos',
       fields: [fld('nombre', '¿Cómo te llamas?', { ph: 'Tu nombre', ac: 'given-name' }), money('ingresoQuincena', 'Salario estimado por quincena', { hint: 'Se usa solo en las quincenas donde no registres lo que realmente recibiste (Ajustes → Ingresos por quincena).' })], saveTxt: ed.welcome ? 'Continuar' : 'Guardar' });
+    if (k === 'meta') return Object.assign(base, { title: 'Mi meta de ahorro', sub: 'Fija cuánto quieres guardar cada mes. Lo que abones a tus cerditos cuenta para esta meta.', formTitle: 'Meta mensual',
+      fields: [money('metaMensual', '¿Cuánto quieres ahorrar al mes?', { hint: 'Tu ingreso de este mes: ' + f(this.per('m').ingreso) + '. Como referencia, el 20% sería ' + f(this.per('m').ingreso * 0.2) + '.' })], saveTxt: 'Guardar meta' });
     if (k === 'ingresos') {
       const keys = []; let kk = qk(iso(new Date())); for (let i = 0; i < 6; i++) { keys.push(kk); kk = qPrev(kk); }
       return Object.assign(base, { title: 'Ingresos por quincena', sub: 'Registra lo que realmente recibiste: salario, extras, recargos y otros. Donde no registres salario uso tu estimado (' + f(D.perfil.ingresoQuincena) + ').', hasList: true, listTitle: 'Últimas quincenas',
@@ -870,7 +931,7 @@ class App extends Component {
         fld('aceiteKm', 'Próximo cambio de aceite (km)', { numeric: true, mode: 'numeric', ph: 'Ej. 12000', value: num(F.aceiteKm) > 0 ? String(num(F.aceiteKm)) : '' }), fld('aceiteCada', 'Cambias el aceite cada (km)', { numeric: true, mode: 'numeric', ph: F.tipo === 'carro' ? '5000' : '3000' }),
         fld('soat', 'SOAT vence', { type: 'date' })] });
     if (k === 'cerditos') return Object.assign(base, { title: 'Cerditos', sub: 'Metas de ahorro. Abónales con + en la pantalla Cerditos o desde el botón +.', hasList: true, listTitle: 'Tus cerditos',
-      items: D.cerditos.map((g, i) => Object.assign({ name: g.nombre, sub: pigs[i].amt + ' de ' + f(g.meta) + ' · ' + pigs[i].pctTxt, color: '#ff6f91', canEdit: true, edit: () => this.edEdit(g) }, del(g.id))),
+      items: D.cerditos.map((g, i) => Object.assign({ name: g.nombre, sub: pigs[i].amt + ' de ' + f(g.meta) + ' · ' + pigs[i].pctTxt, color: '#ff6f91', canEdit: true, edit: () => this.openPig(g.id) }, del(g.id))),
       empty: !D.cerditos.length, emptyTxt: 'Aún no tienes cerditos.', formTitle: editing ? 'Editar cerdito' : 'Nuevo cerdito', saveTxt: editing ? 'Guardar cambios' : 'Crear cerdito',
       fields: [fld('nombre', 'Nombre', { ph: 'Ej. Viaje a Cartagena' }), money('meta', '¿Cuánto quieres ahorrar?'), money('inicial', 'Ya tengo ahorrado (opcional)'), fld('fecha', 'Meta para (opcional)', { type: 'month' })] });
     if (k === 'creditos') return Object.assign(base, { title: 'Créditos', sub: 'Calculo cuota, saldo e intereses con la tasa y el plazo.', hasList: true, listTitle: 'Tus créditos',
