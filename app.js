@@ -483,7 +483,7 @@ class App extends Component {
       this.session = data.session;
       if (!this.session) return this.setSync({ status: 'idle' });
       this.setSync({ email: this.session.user.email });
-      try { if (await this.checkMfa()) this.pull(); } catch (e) { this.setSync({ status: 'err', msg: this.errTxt(e) }); }
+      try { if (await this.checkMfa()) this.pull(); } catch (e) { if (!(await this.staleSession(e))) this.setSync({ status: 'err', msg: this.errTxt(e) }); }
     });
   }
   setSync(o) { this.setState({ sync: Object.assign({}, this.state.sync, o) }); }
@@ -552,6 +552,15 @@ class App extends Component {
     if (/mfa.*disabled|MFA enroll is disabled/i.test(m)) return 'La verificación en dos pasos está desactivada en Supabase (Authentication → Multi-Factor).';
     return m;
   }
+  async staleSession(e) {
+    if (!/sub claim in JWT does not exist|user.*not found|session.*not found|refresh token/i.test((e && e.message) || String(e))) return false;
+    try { await this.sb.auth.signOut({ scope: 'local' }); } catch (x) {}
+    try { localStorage.removeItem('mf-enroll'); } catch (x) {}
+    this.session = null; this.aal2 = false; this.mfaNeed = null; this.enrollInfo = null;
+    this.setSync({ status: 'idle', email: '', msg: 'Tu sesión anterior ya no existe. Entra de nuevo con tu usuario.' });
+    this.setState({ ed: this.state.ed ? Object.assign({}, this.state.ed, { err: 'Esa sesión era de un usuario que ya no existe. Entra de nuevo con tu usuario.', busy: false }) : null });
+    return true;
+  }
   cloudErr(m) { this.setState({ ed: Object.assign({}, this.state.ed, { err: m, busy: false, ok: '' }) }); }
   async cloudSubmit() {
     const f = this.state.cloudForm, stage = this.authStage();
@@ -598,6 +607,7 @@ class App extends Component {
         if (code.length !== 6) return err('Escribe el código de 6 dígitos de tu app autenticadora.');
         const v = await this.sb.auth.mfa.challengeAndVerify({ factorId: this.factorId, code });
         if (v.error) {
+          if (await this.staleSession(v.error)) return;
           if (/factor.*not found|not found/i.test(v.error.message || '')) { try { localStorage.removeItem('mf-enroll'); } catch (e) {} await this.checkMfa(); this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { code: '' }) }); return err('La clave anterior ya no es válida. Te generé una nueva: bórrala del autenticador y agrega esta.'); }
           return err(this.errTxt(v.error));
         }
@@ -606,7 +616,7 @@ class App extends Component {
         if (this.aal2) await this.afterLogin();
         return this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, err: '' }) });
       }
-    } catch (e) { return err(this.errTxt(e)); }
+    } catch (e) { if (await this.staleSession(e)) return; return err(this.errTxt(e)); }
   }
   async afterLogin() {
     await this.pull();
