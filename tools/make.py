@@ -98,7 +98,10 @@ for i, p in enumerate(parts[1:]):
     row = ('<sc-if value="{{mvHasTargets}}" hint-placeholder-val="{{false}}"><div style="font-size: 12.5px; opacity: .7; margin-top: 12px">{{mvTargetLbl}}</div>'
            '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px"><sc-for list="{{mvTargets}}" as="a" hint-placeholder-count="2">'
            '<button class="%s {{a.cls}}" onClick="{{a.pick}}">{{a.label}}</button></sc-for></div></sc-if>'
-           '<sc-if value="{{mvHasErr}}" hint-placeholder-val="{{false}}"><div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">{{mvErr}}</div></sc-if>') % chips[i]
+           '<sc-if value="{{mvCuotasOn}}" hint-placeholder-val="{{false}}"><div style="font-size: 12.5px; opacity: .7; margin-top: 12px">¿A cuántas cuotas?</div>'
+           '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px"><sc-for list="{{mvCuotas}}" as="cq" hint-placeholder-count="3">'
+           '<button class="%s {{cq.cls}}" onClick="{{cq.pick}}">{{cq.label}}</button></sc-for></div><div style="font-size: 12.5px; opacity: .7; margin-top: 8px">{{mvCuotaTxt}}</div></sc-if>'
+           '<sc-if value="{{mvHasErr}}" hint-placeholder-val="{{false}}"><div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">{{mvErr}}</div></sc-if>') % (chips[i], chips[i])
     out += '<sc-for list="{{addCats}}"' + p[:j] + row + p[j:]
 mk = out
 
@@ -113,6 +116,7 @@ def rows_click(s):
     return ''.join(res)
 mk = rows_click(mk)
 mk = re.sub(r'(<sc-for list="\{\{credits\}\}" as="k"[^>]*>\s*<div)', r'\1 onClick="{{k.open}}" tabindex="0" role="button"', mk)
+mk = re.sub(r'(<sc-for list="\{\{tj\}\}" as="t"[^>]*>\s*<div)', r'\1 onClick="{{t.open}}" tabindex="0" role="button"', mk)
 _cp = '      <div class="cr-prev">'
 assert mk.count(_cp) == 1
 mk = mk.replace(_cp, '      <label class="ap-fl" for="cr-cargos">Seguros y otros cargos al mes (opcional)</label>\n      <input id="cr-cargos" class="ap-in" inputmode="numeric" placeholder="$ 0" value="{{cfCargos}}" onChange="{{cfSetCargos}}">\n      <div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">{{cfBaseTxt}}</div>\n' + _cp)

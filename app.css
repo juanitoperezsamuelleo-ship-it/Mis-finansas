@@ -395,3 +395,4 @@ html,body{margin:0;height:100%;background:#000;overscroll-behavior:none;-webkit-
 .cr-tabs button.on{background:var(--apfg)!important;color:var(--apbg)!important}
 .cr-estado{margin-top:14px;padding:12px 14px;border-radius:14px;font-weight:800;font-size:14px;background:rgba(245,165,36,.14);color:#c47f0a}
 .cr-estado.ok{background:rgba(34,181,115,.13);color:#169a5a}
+.pair-code{margin:4px 0 10px;padding:18px 12px;border-radius:18px;background:var(--apcard);border:1.5px dashed #e86aa6;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:32px;font-weight:800;letter-spacing:4px;user-select:all}

@@ -21,6 +21,30 @@ const miles = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 const short = (n) => n >= 1e6 ? (Math.round(n / 1e5) / 10).toString().replace('.', ',') + 'M' : (n >= 1000 ? Math.round(n / 1000) + 'K' : String(Math.round(n)));
 const pctTxt = (x) => String(Math.round(x * 10) / 10).replace('.', ',') + '%';
 const dayTxt = (s) => { const d = pDate(s); return d.getDate() + ' ' + MES[d.getMonth()]; };
+/* cortes de tarjeta entre (desde, hasta] ; corte 0 = fin de mes */
+function corteDate(y, m, day) { const L = lastDay(y, m); return iso(new Date(y, m, day > 0 ? Math.min(day, L) : L)); }
+function cortesEntre(desde, hasta, day) {
+  let [y, m] = desde.split('-').map(Number); m -= 1; let n = 0, g = 0;
+  while (g++ < 240) { const d = corteDate(y, m, day); if (d > hasta) break; if (d > desde) n++; m++; if (m > 11) { m = 0; y++; } }
+  return n;
+}
+function lastCorte(today, day) { const t = new Date(today + 'T12:00'); let y = t.getFullYear(), m = t.getMonth(); let d = corteDate(y, m, day); if (d > today) { m--; if (m < 0) { m = 11; y--; } d = corteDate(y, m, day); } return d; }
+function nextCorte(today, day) { const t = new Date(today + 'T12:00'); let y = t.getFullYear(), m = t.getMonth(); let d = corteDate(y, m, day); if (d <= today) { m++; if (m > 11) { m = 0; y++; } d = corteDate(y, m, day); } return d; }
+function cardCalc(t, movs, today) {
+  const day = t.corte || 0, lc = lastCorte(today, day), nc = nextCorte(today, day);
+  const compras = movs.filter((x) => x.tarjetaId === t.id && x.tipo === 'gasto'), pagos = movs.filter((x) => x.tarjetaId === t.id && x.tipo === 'pagoTarjeta');
+  let pagoMes = 0, proximo = 0, pendiente = 0;
+  const dif = compras.map((x) => {
+    const n = Math.max(1, x.cuotas || 1), cuota = x.monto / n, raw = cortesEntre(x.fecha, today, day), fact = Math.min(n, raw), rawN = cortesEntre(x.fecha, nc, day);
+    if (raw >= 1 && raw <= n) pagoMes += cuota;
+    if (rawN >= 1 && rawN <= n) proximo += cuota;
+    pendiente += x.monto - cuota * fact;
+    return { x, n, cuota, fact, falta: x.monto - cuota * fact };
+  });
+  const pagadoPeriodo = pagos.filter((p) => p.fecha > lc).reduce((a, p) => a + p.monto, 0);
+  const used = Math.max(0, (t.usadoInicial || 0) + compras.reduce((a, x) => a + x.monto, 0) - pagos.reduce((a, p) => a + p.monto, 0));
+  return { lc, nc, pagoMes, proximo, pagadoPeriodo, falta: Math.max(0, pagoMes - pagadoPeriodo), used, pendiente, dif, compras, pagos };
+}
 function nextDayOfMonth(day, from) {
   if (!day) return null;
   let y = from.getFullYear(), m = from.getMonth();
@@ -48,6 +72,35 @@ function normalize(d) {
   ['movs', 'tarjetas', 'vehiculos', 'cerditos', 'creditos'].forEach((k) => { if (!Array.isArray(o[k])) o[k] = []; });
   return o;
 }
+const ARR = ['movs', 'tarjetas', 'vehiculos', 'cerditos', 'creditos'], SCAL = ['perfil', 'plan', 'metaMensual', 'onboarded'];
+const strip = (o) => { const c = Object.assign({}, o); delete c._u; return JSON.stringify(c); };
+function stampDoc(prev, d, por) {
+  const now = Date.now(); d.del = Object.assign({}, prev.del || {});
+  ARR.forEach((k) => {
+    const pm = new Map((prev[k] || []).map((o) => [o.id, strip(o)]));
+    (d[k] || []).forEach((o) => { if (!pm.has(o.id) || pm.get(o.id) !== strip(o)) { o._u = now; if (k === 'movs' && por && !pm.has(o.id) && !o.por) o.por = por; } });
+    const ids = new Set((d[k] || []).map((o) => o.id));
+    pm.forEach((_, id) => { if (!ids.has(id)) d.del[id] = now; });
+  });
+  if (SCAL.some((k) => JSON.stringify(prev[k]) !== JSON.stringify(d[k]))) d.su = now;
+  return d;
+}
+function mergeDocs(loc, rem) {
+  const out = JSON.parse(JSON.stringify(loc)), del = Object.assign({}, rem.del || {});
+  Object.entries(loc.del || {}).forEach(([id, t]) => { if (!(del[id] >= t)) del[id] = t; });
+  ARR.forEach((k) => {
+    const lm = new Map((loc[k] || []).map((o) => [o.id, o])), rm = new Map((rem[k] || []).map((o) => [o.id, o])), res = [];
+    const pick = (id) => { const a = lm.get(id), b = rm.get(id), w = !a ? b : !b ? a : ((b._u || 0) > (a._u || 0) ? b : a); if (del[id] && del[id] >= (w._u || 0)) return null; return JSON.parse(JSON.stringify(w)); };
+    (loc[k] || []).forEach((o) => { const w = pick(o.id); if (w) res.push(w); });
+    (rem[k] || []).forEach((o) => { if (!lm.has(o.id)) { const w = pick(o.id); if (w) res.push(w); } });
+    out[k] = res;
+  });
+  if ((rem.su || 0) > (loc.su || 0) || (!loc.su && !rem.su && (rem.updatedAt || 0) > (loc.updatedAt || 0))) { SCAL.forEach((k) => { out[k] = JSON.parse(JSON.stringify(rem[k] === undefined ? null : rem[k])); }); out.su = rem.su; }
+  const cut = Date.now() - 120 * 864e5; Object.keys(del).forEach((id) => { if (del[id] < cut) delete del[id]; });
+  out.del = del; out.updatedAt = Math.max(loc.updatedAt || 0, rem.updatedAt || 0);
+  return normalize(out);
+}
+const sameDoc = (a, b) => { const f = (d) => JSON.stringify(Object.assign({}, d, { prefs: null, updatedAt: 0 })); return f(a) === f(b); };
 function loadLocal() { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) { return blank(); } }
 function saveLocal(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
 function loadCloudCfg() { try { return JSON.parse(localStorage.getItem(CLOUD)) || null; } catch (e) { return null; } }
@@ -221,8 +274,9 @@ class App extends Component {
 
   /* ---------- mutaciones ---------- */
   mut(fn, opts) {
-    const d = JSON.parse(JSON.stringify(this.state.data));
+    const prev = this.state.data, d = JSON.parse(JSON.stringify(prev));
     fn(d);
+    stampDoc(prev, d, this.shared() ? this.myName() : '');
     d.updatedAt = Date.now();
     this.persist(d);
     this.setState({ data: d }, () => { if (opts && opts.recount) this.countTo(this.per().total, this.state.shown); });
@@ -291,7 +345,8 @@ class App extends Component {
     const vTxt = c.vPre === 'minus' ? sign + ' ' + fmt(x.monto) : (c.vPre === 'minus2' ? sign + fmt(x.monto).slice(1) : (sign === '−' ? fmt(x.monto) : sign + ' ' + fmt(x.monto)));
     const cat = x.tipo === 'aporte' ? 'Cerdito' : (x.tipo === 'ingreso' ? 'Ingreso' : (x.tipo === 'pagoTarjeta' ? 'Pago tarjeta' : CAT_NAME[x.cat]));
     const ci = x.tipo === 'gasto' ? CAT_IDX[x.cat] : (x.tipo === 'aporte' ? 0 : 3);
-    return { id: x.id, dest, t, s: dt + hr + (dest && x.tipo === 'gasto' ? ' · ' + dest : ''), v: x.monto, vTxt, cat, color: (x.tipo === 'aporte' ? c.pig : c.cat)[ci], open: () => this.setState({ movSel: x.id, movConfirm: false }) };
+    const cq = x.cuotas > 1 ? ' · ' + x.cuotas + ' cuotas' : '', por = x.por && this.shared() ? ' · ' + x.por : '';
+    return { id: x.id, dest, t, s: dt + hr + (dest && x.tipo === 'gasto' ? ' · ' + dest : '') + cq + por, v: x.monto, vTxt, cat, color: (x.tipo === 'aporte' ? c.pig : c.cat)[ci], open: () => this.setState({ movSel: x.id, movConfirm: false }) };
   }
   sortMovs(arr) { return arr.slice().sort((a, b) => (b.fecha + (b.ts || 0)).localeCompare(a.fecha + (a.ts || 0)) || (b.ts || 0) - (a.ts || 0)); }
   saveMov() {
@@ -302,10 +357,11 @@ class App extends Component {
     if (map.need && !map.optional && !target) return this.setState({ mvErr: { tarjetas: 'Primero agrega una tarjeta en Ajustes → Tarjetas.', cerditos: 'Primero crea un cerdito en Ajustes → Cerditos.' }[map.need] });
     const mov = { id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: map.tipo, cat: map.cat, monto, nota: s.mv.nota.trim() };
     if (map.need === 'tarjetas') mov.tarjetaId = target;
+    if (map.tipo === 'gasto' && map.cat === 'tarjeta' && (s.mvCuotas || 1) > 1) mov.cuotas = s.mvCuotas;
     if (map.need === 'vehiculos' && target) mov.vehiculoId = target;
     if (map.need === 'ahorro' && target) mov.cerditoId = target;
     if (map.need === 'isub') mov.sub = target || 'extra';
-    this.setState({ sheet: false, mv: { monto: '', nota: '' }, mvErr: '' });
+    this.setState({ sheet: false, mv: { monto: '', nota: '' }, mvErr: '', mvCuotas: 1 });
     this.mut((d) => d.movs.push(mov), { recount: true });
     this.toast();
   }
@@ -320,7 +376,7 @@ class App extends Component {
       tarjetas: { nombre: '', ult4: '', cupo: '', usadoInicial: '', corte: '', pago: '' },
       vehiculos: { nombre: '', tipo: 'moto', km: '', aceiteKm: '', aceiteCada: '', soat: '' },
       cerditos: { nombre: '', meta: '', inicial: '', fecha: '' },
-      creditos: {}, datos: {}, ahorro: { monto: '', destino: '', nota: '' }, meta: { metaMensual: this.state.data.metaMensual ? String(this.state.data.metaMensual) : '' }, seguridad: { pin: '', pin2: '', pinOld: '' },
+      creditos: {}, pareja: { join: '' }, datos: {}, ahorro: { monto: '', destino: '', nota: '' }, meta: { metaMensual: this.state.data.metaMensual ? String(this.state.data.metaMensual) : '' }, seguridad: { pin: '', pin2: '', pinOld: '' },
       ingresos: this.incForm(qk(iso(new Date())))
     }[kind];
   }
@@ -342,6 +398,7 @@ class App extends Component {
       this.mut((d) => d.movs.push(Object.assign({ id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: 'aporte', cat: 'cerdito', monto, nota: f.nota.trim() || 'Ahorro' }, f.destino ? { cerditoId: f.destino } : {})));
       return this.setState({ ed: Object.assign({}, ed, { form: { monto: '', destino: f.destino, nota: '' }, err: '', ok: 'Guardado: ' + fmt(monto) + '. Cuenta para tu meta del mes y del año.' }) });
     }
+    if (k === 'pareja') return this.crearCodigo();
     if (k === 'meta') {
       if (!(num(f.metaMensual) > 0)) return err('Escribe cuánto quieres ahorrar al mes.');
       this.mut((d) => { d.metaMensual = num(f.metaMensual); d.plan = 'custom'; });
@@ -482,6 +539,42 @@ class App extends Component {
       guardar: () => this.pigSave(), eliminar: () => this.pigDelete(), delPigTxt: pg.confirmDel ? 'Confirmar: eliminar cerdito' : 'Eliminar cerdito',
       close: () => this.setState({ pigSel: null, pg: null }) };
   }
+  openTj(id) {
+    const t = this.state.data.tarjetas.find((x) => x.id === id); if (!t) return;
+    this.setState({ tjSel: id, tjf: { monto: '', fecha: iso(new Date()), err: '', ok: '' }, sheet: false, panel: false, ed: null });
+  }
+  setTjf(o) { this.setState({ tjf: Object.assign({}, this.state.tjf, o) }); }
+  tjPagar() {
+    const id = this.state.tjSel, D = this.state.data, t = D.tarjetas.find((x) => x.id === id), cc = cardCalc(t, D.movs, iso(new Date())), f = this.state.tjf;
+    const monto = num(f.monto) || Math.round(cc.falta);
+    if (!(monto > 0)) return this.setTjf({ err: 'Escribe cuánto pagaste.', ok: '' });
+    this.mut((d) => d.movs.push({ id: uid(), fecha: f.fecha || iso(new Date()), ts: Date.now(), tipo: 'pagoTarjeta', cat: 'tarjeta', monto, nota: '', tarjetaId: id }), { recount: true });
+    this.setTjf({ monto: '', err: '', ok: 'Pago de ' + fmt(monto) + ' registrado. Tu deuda baja y el cupo se libera.' });
+  }
+  tjView() {
+    const s = this.state, D = s.data, id = s.tjSel, t = D.tarjetas.find((x) => x.id === id), tf = s.tjf;
+    if (!t || !tf) return null;
+    const today = iso(new Date()), cc = cardCalc(t, D.movs, today), f = fmt, n = num(tf.monto);
+    const dd = (d) => dayTxt(d);
+    const pagoD = nextDayOfMonth(t.pago, new Date());
+    const hist = this.sortMovs(D.movs.filter((x) => x.tarjetaId === id)).slice(0, 40);
+    return { name: t.nombre + (t.ult4 ? ' •• ' + t.ult4 : ''), sub: 'Cupo ' + f(t.cupo) + ' · corte ' + (t.corte ? 'el ' + t.corte : 'fin de mes') + (t.pago ? ' · pago el ' + t.pago : ''),
+      falta: f(cc.falta), faltaLbl: cc.falta > 0 ? 'por pagar' + (pagoD ? ' antes del ' + pagoD.getDate() + ' ' + MES[pagoD.getMonth()] : '') : (cc.pagoMes > 0 ? '¡extracto pagado!' : 'nada por pagar de este corte'),
+      extTxt: 'Extracto del ' + dd(cc.lc) + ': ' + f(cc.pagoMes) + (cc.pagadoPeriodo > 0 ? ' · ya pagaste ' + f(cc.pagadoPeriodo) : ''),
+      deuda: f(cc.used), disp: f(Math.max(0, t.cupo - cc.used)), proximo: f(cc.proximo), ncTxt: 'corte ' + dd(cc.nc), pendiente: f(cc.pendiente),
+      w: t.cupo > 0 ? Math.min(100, Math.round(cc.used / t.cupo * 100)) : 0,
+      hasInicial: (t.usadoInicial || 0) > 0, inicialTxt: 'Tu deuda inicial (' + f(t.usadoInicial) + ') no tiene cuotas registradas: súmale lo que diga tu extracto.',
+      monto: n > 0 ? miles(n) : '', ph: cc.falta > 0 ? miles(Math.round(cc.falta)) : '0', fecha: tf.fecha,
+      setMonto: (e) => this.setTjf({ monto: e.target.value.replace(/\D/g, ''), err: '', ok: '' }), setFecha: (e) => this.setTjf({ fecha: e.target.value }),
+      quick: [['Pago del mes', Math.round(cc.falta)], ['Toda la deuda', Math.round(cc.used)]].filter((q) => q[1] > 0).map(([l, v]) => ({ label: l, pick: () => this.setTjf({ monto: String(v), err: '', ok: '' }) })),
+      pagar: () => this.tjPagar(), hasErr: !!tf.err, err: tf.err, hasOk: !!tf.ok, ok: tf.ok,
+      dif: cc.dif.filter((o) => o.n > 1 && o.fact < o.n).map((o) => ({ name: o.x.nota || 'Compra', sub: 'Cuota ' + Math.max(1, o.fact) + ' de ' + o.n + (o.fact === 0 ? ' (llega en el próximo corte)' : '') + ' · ' + dd(o.x.fecha), cuota: f(o.cuota) + '/mes', falta: 'faltan ' + f(o.falta), w: Math.round(o.fact / o.n * 100) })),
+      noDif: !cc.dif.some((o) => o.n > 1 && o.fact < o.n),
+      hist: hist.map((x) => ({ t: x.tipo === 'pagoTarjeta' ? 'Pago' : (x.nota || 'Compra'), sub: dd(x.fecha) + ' ' + x.fecha.slice(0, 4) + (x.cuotas > 1 ? ' · ' + x.cuotas + ' cuotas' : '') + (x.por && this.shared() ? ' · ' + x.por : ''), v: (x.tipo === 'pagoTarjeta' ? '+ ' : '− ') + f(x.monto), color: x.tipo === 'pagoTarjeta' ? '#22b573' : 'inherit' })),
+      noHist: !hist.length,
+      editar: () => { this.setState({ tjSel: null, tjf: null }); this.openEd('tarjetas'); setTimeout(() => this.edEdit(t), 0); },
+      close: () => this.setState({ tjSel: null, tjf: null }) };
+  }
   openCr(id, tab) {
     const c = this.state.data.creditos.find((x) => x.id === id); if (!c) return;
     this.setState({ crSel: id, cr: { tab: tab || 'cuota', pMonto: '', pFecha: iso(new Date()), pGasto: true, confirmPago: null, monto: '', modo: 'plazo', gasto: true, fecha: iso(new Date()), err: '', ok: '', confirmDel: false, confirmAb: null,
@@ -591,6 +684,7 @@ class App extends Component {
       this.sb = window.supabase.createClient(this.cloud.url, this.cloud.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'mf-auth' } });
     } catch (e) { this.sb = null; this.setSync({ status: 'err', msg: 'La URL o la clave de Supabase no son válidas.' }); return; }
     this.sb.auth.onAuthStateChange((ev, session) => { this.session = session; if (!session) { this.aal2 = false; this.mfaNeed = null; this.setSync({ status: 'idle', email: '' }); } });
+    if (!this.poll) this.poll = setInterval(() => { if (document.visibilityState === 'visible' && this.canSync() && this.shared()) this.sync(); }, 25000);
     this.sb.auth.getSession().then(async ({ data }) => {
       this.session = data.session;
       if (!this.session) return this.setSync({ status: 'idle' });
@@ -626,30 +720,79 @@ class App extends Component {
     return false;
   }
   canSync() { return !!(this.sb && this.session && this.aal2 && !this.state.locked); }
-  async pull() {
+  shared() { const h = this.state.home; return !!(h && (h.role === 'member' || (h.members && h.members.length))); }
+  myName() { const u = userOf((this.session && this.session.user.email) || ''); return u ? u.charAt(0).toUpperCase() + u.slice(1) : ''; }
+  async resolveHome() {
+    const uid = this.session.user.id;
+    const { data: m, error } = await this.sb.from('hogar_miembros').select('owner').eq('member', uid).maybeSingle();
+    if (error && !/does not exist|Could not find/i.test(error.message)) throw error;
+    let home = { uid, id: uid, role: 'owner', members: [] };
+    if (m && m.owner) home = { uid, id: m.owner, role: 'member', members: [] };
+    else { const { data: ms } = await this.sb.from('hogar_miembros').select('member, nombre, created_at').eq('owner', uid); home.members = ms || []; }
+    this.setState({ home });
+    return home;
+  }
+  sync(pushOnly) {
+    this.syncQ = (this.syncQ || Promise.resolve()).then(() => this.syncOnce(pushOnly)).catch((e) => this.setSync({ status: 'err', msg: this.errTxt(e) }));
+    return this.syncQ;
+  }
+  async syncOnce(pushOnly) {
     if (!this.canSync()) return;
     if (!navigator.onLine) return this.setSync({ status: 'offline' });
     this.setSync({ status: 'busy' });
-    const { data: row, error } = await this.sb.from('finanzas').select('data, updated_at').eq('user_id', this.session.user.id).maybeSingle();
+    let home = this.state.home;
+    if (!home || home.uid !== this.session.user.id) home = await this.resolveHome();
+    const { data: row, error } = await this.sb.from('finanzas').select('data, updated_at').eq('user_id', home.id).maybeSingle();
     if (error) return this.setSync({ status: 'err', msg: this.errTxt(error) });
     const local = this.state.data;
-    if (row && new Date(row.updated_at).getTime() > (local.updatedAt || 0)) {
-      const d = normalize(row.data); d.updatedAt = new Date(row.updated_at).getTime();
-      this.persist(d); this.setState({ data: d }, () => this.countTo(this.per().total, 0));
-      this.setSync({ status: 'ok', last: Date.now(), msg: '' });
-    } else if (!row || (local.updatedAt || 0) > new Date(row.updated_at).getTime()) {
-      await this.push();
-    } else this.setSync({ status: 'ok', last: Date.now(), msg: '' });
-  }
-  schedulePush(ms) { clearTimeout(this.tp); if (this.canSync()) this.tp = setTimeout(() => this.push(), ms || 1200); }
-  async push() {
-    if (!this.canSync()) return;
-    if (!navigator.onLine) return this.setSync({ status: 'offline' });
-    this.setSync({ status: 'busy' });
-    const d = this.state.data;
-    const { error } = await this.sb.from('finanzas').upsert({ user_id: this.session.user.id, data: d, updated_at: new Date(d.updatedAt || Date.now()).toISOString() });
-    if (error) return this.setSync({ status: 'err', msg: this.errTxt(error) });
+    const remote = row ? normalize(row.data) : null;
+    const merged = remote ? mergeDocs(local, remote) : local;
+    merged.prefs = local.prefs;
+    if (!sameDoc(merged, local)) { this.persist(merged); this.setState({ data: merged }, () => this.countTo(this.per().total, this.state.shown)); }
+    if (!remote || !sameDoc(merged, remote) || pushOnly === 'force') {
+      const up = Object.assign({}, merged, { updatedAt: Date.now() });
+      const { error: e2 } = await this.sb.from('finanzas').upsert({ user_id: home.id, data: up, updated_at: new Date().toISOString() });
+      if (e2) return this.setSync({ status: 'err', msg: this.errTxt(e2) });
+    }
     this.setSync({ status: 'ok', last: Date.now(), msg: '' });
+  }
+  pull() { return this.sync(); }
+  schedulePush(ms) { clearTimeout(this.tp); if (this.canSync()) this.tp = setTimeout(() => this.sync(), ms || 1200); }
+  push() { return this.sync(); }
+  async crearCodigo() {
+    const err = (m) => this.setState({ ed: Object.assign({}, this.state.ed, { err: m, ok: '', busy: false }) });
+    if (!this.canSync()) return err('Primero conecta la nube con tu usuario.');
+    this.setState({ ed: Object.assign({}, this.state.ed, { busy: true, err: '' }) });
+    const { data, error } = await this.sb.rpc('crear_invitacion');
+    if (error) return err(this.errTxt(error));
+    this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, code: data, ok: '' }) });
+  }
+  async unirme() {
+    const ed = this.state.ed, code = String((ed.form && ed.form.join) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const err = (m) => this.setState({ ed: Object.assign({}, this.state.ed, { err: m, ok: '', busy: false }) });
+    if (!this.canSync()) return err('Primero conecta la nube con tu usuario.');
+    if (code.length !== 8) return err('El código tiene 8 letras y números.');
+    if (!ed.confirmJoin) return this.setState({ ed: Object.assign({}, ed, { confirmJoin: true, err: '', ok: 'Al unirte verás y editarás las finanzas de tu pareja en lugar de las tuyas. Tus datos actuales quedan guardados en tu cuenta y vuelven si sales. Toca otra vez para confirmar.' }) });
+    this.setState({ ed: Object.assign({}, ed, { busy: true, err: '' }) });
+    const { error } = await this.sb.rpc('aceptar_invitacion', { p_code: code, p_nombre: this.myName() });
+    if (error) return err(this.errTxt(error));
+    await this.switchHome();
+    this.setState({ ed: Object.assign({}, this.state.ed, { busy: false, confirmJoin: false, form: { join: '' }, ok: '¡Listo! Ya comparten las finanzas.' }) });
+  }
+  async switchHome() {
+    clearTimeout(this.tp);
+    const d = blank(); d.prefs = this.state.data.prefs; d.onboarded = true;
+    this.persist(d); this.setState({ data: d, home: null });
+    await this.resolveHome(); await this.sync();
+  }
+  async salirHogar(memberId) {
+    const ed = this.state.ed, uid = this.session.user.id, key = memberId || 'yo';
+    if (ed.confirm !== key) return this.setState({ ed: Object.assign({}, ed, { confirm: key }) });
+    await this.sync();
+    const { error } = await this.sb.from('hogar_miembros').delete().eq('member', memberId || uid);
+    if (error) return this.setState({ ed: Object.assign({}, this.state.ed, { err: this.errTxt(error) }) });
+    if (memberId) { await this.resolveHome(); this.setState({ ed: Object.assign({}, this.state.ed, { confirm: null, ok: 'Quitaste a esa persona. Ya no ve tus finanzas.' }) }); }
+    else { await this.switchHome(); this.setState({ ed: Object.assign({}, this.state.ed, { confirm: null, ok: 'Saliste. Volviste a tus finanzas personales.' }) }); }
   }
   errTxt(e) {
     const m = (e && e.message) || String(e);
@@ -746,6 +889,7 @@ class App extends Component {
     clearTimeout(this.tp);
     if (this.sb) await this.sb.auth.signOut(global ? { scope: 'global' } : undefined);
     this.session = null; this.aal2 = false; this.mfaNeed = null; this.enrollInfo = null;
+    this.setState({ home: null });
     this.setSync({ status: 'idle', email: '' });
   }
   resetCloud() { try { localStorage.removeItem(CLOUD); } catch (e) {} this.cloud = null; this.sb = null; this.session = null; this.aal2 = false; this.setSync({ status: 'off', email: '', msg: '' }); this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { url: '', key: '' }) }); }
@@ -871,7 +1015,8 @@ class App extends Component {
     const cards = D.tarjetas.map((t, i) => {
       const used = Math.max(0, (t.usadoInicial || 0) + D.movs.filter((x) => x.tarjetaId === t.id).reduce((a, x) => a + (x.tipo === 'pagoTarjeta' ? -x.monto : (x.tipo === 'gasto' ? x.monto : 0)), 0));
       const pagoD = nextDayOfMonth(t.pago, now), corteD = nextDayOfMonth(t.corte, now);
-      return { name: t.nombre, last: t.ult4 ? '•• ' + t.ult4 : '', cupo: t.cupo, used, pagoD, corte: corteD ? corteD.getDate() + ' ' + MES[corteD.getMonth()] : '—', pago: pagoD ? pagoD.getDate() + ' ' + MES[pagoD.getMonth()] : '—',
+      const cc = cardCalc(t, D.movs, todayIso);
+      return { open: () => this.openTj(t.id), name: t.nombre, last: t.ult4 ? '•• ' + t.ult4 : '', cupo: t.cupo, used, pagoD, pagoMesTxt: f(cc.falta), corte: corteD ? corteD.getDate() + ' ' + MES[corteD.getMonth()] : '—', pago: pagoD ? pagoD.getDate() + ' ' + MES[pagoD.getMonth()] : '—',
         usedTxt: f(used), cupoTxt: f(t.cupo), dispTxt: f(Math.max(0, t.cupo - used)), w: t.cupo > 0 ? Math.min(100, Math.round(used / t.cupo * 100)) : 0,
         bg: c.tjBg[i % c.tjBg.length], solid: c.tjSolid[i % c.tjSolid.length], delay: 60 + i * 110 };
     });
@@ -938,6 +1083,9 @@ class App extends Component {
     const map = ADD_MAP[s.addCat], tOpts = map.need === 'isub' ? ISUB_OPTS : (map.need === 'ahorro' ? [{ id: '', nombre: 'Ahorro general' }].concat(D.cerditos) : (map.need ? D[map.need] : []));
     const tSel = s.mvTarget != null && tOpts.some((o) => o.id === s.mvTarget) ? s.mvTarget : (tOpts[0] && tOpts[0].id);
     const mvTargets = tOpts.map((o) => ({ label: o.nombre, cls: o.id === tSel ? 'on' : '', pick: () => this.setState({ mvTarget: o.id }) }));
+    const mvCuotasOn = map.tipo === 'gasto' && map.cat === 'tarjeta', mvC = s.mvCuotas || 1, mvM = num(s.mv.monto);
+    const mvCuotas = [1, 2, 3, 6, 12, 24, 36].map((n) => ({ label: n === 1 ? '1 (contado)' : String(n), cls: n === mvC ? 'on' : '', pick: () => this.setState({ mvCuotas: n }) }));
+    const mvCuotaTxt = mvC > 1 && mvM > 0 ? mvC + ' cuotas de ' + f(Math.round(mvM / mvC)) + ' al mes' : 'Se cobra completa en el próximo extracto';
     const looks = LOOKS.map((L) => { const t = L[mode]; return { name: L.name, desc: L.desc, font: L.font, weight: L.weight, fstyle: L.fstyle, rad: L.rad, bg: t.bg, fg: t.fg, edge: t.edge, a0: t.a[0], a1: t.a[1], a2: t.a[2], on: lk === L.id, cls: lk === L.id ? 'on' : '', pick: () => this.pickLook(L.id) }; });
     const thIdx = { light: 0, dark: 1, auto: 2 }[D.prefs.theme] || 0;
     const nombre = D.perfil.nombre || 'hola';
@@ -975,7 +1123,7 @@ class App extends Component {
       sheetOn: s.sheet, openSheet: () => this.setState({ sheet: true, mvErr: '' }), closeSheet: () => this.setState({ sheet: false, mvErr: '' }), save: () => this.saveMov(),
       addCats: ADDS.map((label, i) => ({ label, cls: s.addCat === i ? 'on' : '', pick: () => this.setState({ addCat: i, mvErr: '' }) })),
       mv: { monto: cfM > 0 ? miles(cfM) : '', nota: s.mv.nota }, mvMonto: (e) => this.setState({ mv: Object.assign({}, s.mv, { monto: e.target.value.replace(/\D/g, '') }), mvErr: '' }), mvNota: (e) => this.setState({ mv: Object.assign({}, this.state.mv, { nota: e.target.value }) }),
-      mvHasTargets: mvTargets.length > 0, mvTargets, mvTargetLbl: { tarjetas: '¿Con qué tarjeta?', vehiculos: '¿Qué vehículo?', cerditos: '¿A qué cerdito?', isub: '¿Qué tipo de ingreso?', ahorro: '¿A dónde va?' }[map.need] || '', mvHasErr: !!s.mvErr, mvErr: s.mvErr,
+      mvHasTargets: mvTargets.length > 0, mvTargets, mvCuotasOn, mvCuotas, mvCuotaTxt, mvTargetLbl: { tarjetas: '¿Con qué tarjeta?', vehiculos: '¿Qué vehículo?', cerditos: '¿A qué cerdito?', isub: '¿Qué tipo de ingreso?', ahorro: '¿A dónde va?' }[map.need] || '', mvHasErr: !!s.mvErr, mvErr: s.mvErr,
       toastOn: s.toast,
       panelOn: s.panel, closePanel: () => { this.setState({ panel: false, welcome: false }); }, looks, showAcc: !s.welcome,
       apTitle: s.welcome ? 'Elige tu estilo' : 'Ajustes',
@@ -986,6 +1134,7 @@ class App extends Component {
         { label: 'Tarjetas', sub: D.tarjetas.length ? D.tarjetas.length + ' registradas' : 'Ninguna todavía', color: '#6fa8ff', open: () => this.openEd('tarjetas') },
         { label: 'Vehículos', sub: vs.length ? vs.map((x) => x.nombre).join(', ') : 'Ninguno todavía', color: '#ff6b3d', open: () => this.openEd('vehiculos') },
         { label: 'Cerditos', sub: pigs.length ? pigs.length + ' · ' + f(pigTotal) : 'Ninguno todavía', color: '#ff6f91', open: () => this.openEd('cerditos') },
+        { label: 'Pareja', sub: this.state.home && this.state.home.role === 'member' ? 'Compartiendo finanzas' : (this.state.home && this.state.home.members && this.state.home.members.length ? 'Compartes con ' + this.state.home.members.map((m) => m.nombre || 'tu pareja').join(', ') : 'Ahorrar y gastar juntos'), color: '#e86aa6', open: () => this.openEd('pareja') },
         { label: 'Créditos', sub: credits.length ? credits.length + ' · cuotas ' + f(cuotaTot) + '/mes' : 'Ninguno todavía', color: '#3cc59a', open: () => this.openEd('creditos') },
         { label: 'Seguridad del teléfono', sub: lock.enabled() ? 'PIN activo' + (lock.hasBio() ? ' · huella / Face ID' : '') + ' · datos cifrados' : 'Sin bloqueo · actívalo', color: '#e5484d', open: () => this.openEd('seguridad') },
         { label: 'Nube y copia de seguridad', sub: this.syncView().title, color: '#ffc94d', open: () => this.openEd('datos') }
@@ -1007,7 +1156,7 @@ class App extends Component {
       sync: this.syncView(), syncNow: () => this.pull(), logout: () => this.logout(), exportData: () => this.exportData(), importData: (e) => this.importData(e), skipCloud: () => { this.setState({ ed: null }); this.finishWelcome(); },
       movOn: !!movD, movD: movD || {}, closeMov: () => this.setState({ movSel: null, movConfirm: false }),
       logoutAll: () => this.logout(true),
-      pigOn: !!this.pigView(), pg: this.pigView() || {}, crOn: !!this.crView(), crv: this.crView() || {},
+      pigOn: !!this.pigView(), pg: this.pigView() || {}, crOn: !!this.crView(), crv: this.crView() || {}, tjOn: !!this.tjView(), tjv: this.tjView() || {},
       lockOn: s.locked, lk: { title: 'Mis Finanzas', msg: s.lockMsg, msgCls: s.lockErr ? 'err' : '', hasBio: lock.hasBio(), bio: () => this.unlockBio(),
         dots: [0, 1, 2, 3, 4, 5].map((i) => ({ cls: i < s.lockPin.length ? 'on' : '' })),
         keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((k) => ({ label: k === 'del' ? '⌫' : k, aria: k === 'del' ? 'Borrar' : (k ? 'Número ' + k : ''), cls: k === '' ? 'hide' : (k === 'del' ? 'ghost' : ''), press: () => k && this.pressKey(k) })) }
@@ -1029,7 +1178,7 @@ class App extends Component {
     const money = (id, label, o) => { const n = num(F[id]); return fld(id, label, Object.assign({ numeric: true, mode: 'numeric', ph: '$ 0', value: n > 0 ? miles(n) : '' }, o || {})); };
     const choice = (id, label, opts) => ({ id: 'ed-' + id, label, isInput: false, isChoice: true, hasHint: false, opts: opts.map(([v, l]) => ({ label: l, cls: F[id] === v ? 'on' : '', pick: () => this.setEdF(id, v) })) });
     const del = (id) => ({ delTxt: ed.confirm === id ? '¿Seguro?' : 'Eliminar', delCls: ed.confirm === id ? 'danger' : '', del: () => this.edDel(id) });
-    const base = { title: '', sub: '', canClose: !ed.welcome, hasList: false, listTitle: '', items: [], empty: false, emptyTxt: '', hasForm: true, formTitle: '', fields: [], hasErr: !!ed.err, err: ed.err, saveTxt: 'Guardar', saveCls: ed.busy ? 'ap-go off' : 'ap-go', save: () => this.edSave(), hasAlt: false, altTxt: '', alt: null, hasAlt2: false, alt2Txt: '', alt2: null, hasNote: false, note: '', hasQr: false, qr: '', secret: '', otpUri: '', copySecret: null, copyTxt: 'Copiar clave', hasMeter: false, meterW: 0, meterC: '', meterTxt: '', hasOk: !!ed.ok, ok: ed.ok || '', hasCancelEdit: !!ed.editId, cancelEdit: () => this.setState({ ed: Object.assign({}, ed, { editId: null, form: this.edDefaults(k), err: '' }) }), isDatos: false, welcome: !!ed.welcome };
+    const base = { title: '', sub: '', canClose: !ed.welcome, hasList: false, listTitle: '', items: [], empty: false, emptyTxt: '', hasForm: true, formTitle: '', fields: [], hasErr: !!ed.err, err: ed.err, saveTxt: 'Guardar', saveCls: ed.busy ? 'ap-go off' : 'ap-go', save: () => this.edSave(), hasAlt: false, altTxt: '', alt: null, hasAlt2: false, alt2Txt: '', alt2: null, hasNote: false, note: '', hasQr: false, qr: '', secret: '', otpUri: '', copySecret: null, copyTxt: 'Copiar clave', hasMeter: false, meterW: 0, meterC: '', meterTxt: '', hasOk: !!ed.ok, ok: ed.ok || '', hasSave: true, hasCode: false, code: '', copyCode: null, copyCodeTxt: 'Copiar código', hasCancelEdit: !!ed.editId, cancelEdit: () => this.setState({ ed: Object.assign({}, ed, { editId: null, form: this.edDefaults(k), err: '' }) }), isDatos: false, welcome: !!ed.welcome };
     const editing = !!ed.editId;
     if (k === 'perfil') return Object.assign(base, { title: ed.welcome ? '¡Bienvenido!' : 'Perfil', sub: ed.welcome ? 'Dos datos y empezamos. Luego proteges la app, conectas la nube y eliges el estilo.' : 'Tu nombre y tu salario estimado por quincena.', formTitle: 'Tus datos',
       fields: [fld('nombre', '¿Cómo te llamas?', { ph: 'Tu nombre', ac: 'given-name' }), money('ingresoQuincena', 'Salario estimado por quincena', { hint: 'Se usa solo en las quincenas donde no registres lo que realmente recibiste (Ajustes → Ingresos por quincena).' })], saveTxt: ed.welcome ? 'Continuar' : 'Guardar' });
@@ -1041,6 +1190,23 @@ class App extends Component {
           delTxt: ed.confirm === x.id ? '¿Seguro?' : 'Borrar', delCls: ed.confirm === x.id ? 'danger' : '', del: () => { if (this.state.ed.confirm !== x.id) return this.setState({ ed: Object.assign({}, this.state.ed, { confirm: x.id }) }); this.mut((d) => { d.movs = d.movs.filter((m) => m.id !== x.id); }); this.setState({ ed: Object.assign({}, this.state.ed, { confirm: null, ok: 'Borrado.' }) }); } })),
         empty: !list.length, emptyTxt: 'Aún no registras ahorro este mes.', formTitle: 'Nuevo ahorro',
         fields: [money('monto', '¿Cuánto guardaste?'), choice('destino', '¿A dónde va?', [['', 'Ahorro general']].concat(D.cerditos.map((g) => [g.id, g.nombre]))), fld('nota', 'Nota (opcional)', { ph: 'Ej. ahorro de la quincena' })], saveTxt: 'Guardar ahorro' });
+    }
+    if (k === 'pareja') {
+      const h = this.state.home;
+      if (!this.canSync() || !h) return Object.assign(base, { title: 'Finanzas en pareja', sub: 'Los dos ven y editan los mismos gastos, tarjetas, cerditos, créditos y metas.', hasSave: false, hasNote: true,
+        note: 'Para compartir, primero entra a la nube con tu usuario y la verificación en dos pasos (Ajustes → Nube). Tu pareja también necesita su propio usuario.', hasAlt: true, altTxt: 'Ir a la nube', alt: () => this.openEd('datos') });
+      if (h.role === 'member') return Object.assign(base, { title: 'Finanzas en pareja', sub: 'Estás viendo y editando las finanzas compartidas.', hasSave: false, hasNote: true,
+        note: 'Todo lo que anotes lo ve tu pareja al instante (se actualiza cada pocos segundos con la app abierta). Cada gasto muestra quién lo registró.',
+        hasAlt2: true, alt2Txt: ed.confirm === 'yo' ? 'Confirmar: salir de las finanzas compartidas' : 'Salir de las finanzas compartidas', alt2: () => this.salirHogar() });
+      const mem = h.members || [];
+      return Object.assign(base, { title: 'Finanzas en pareja', sub: 'Los dos ven y editan lo mismo: gastos, ingresos, tarjetas, cerditos, créditos y metas. Cada movimiento muestra quién lo anotó.',
+        hasList: mem.length > 0, listTitle: 'Comparten contigo', items: mem.map((m) => ({ name: m.nombre || 'Tu pareja', sub: 'Ve y edita todo', color: '#e86aa6', canEdit: false,
+          delTxt: ed.confirm === m.member ? '¿Seguro?' : 'Quitar', delCls: ed.confirm === m.member ? 'danger' : '', del: () => this.salirHogar(m.member) })),
+        hasCode: !!ed.code, code: ed.code ? ed.code.slice(0, 4) + '-' + ed.code.slice(4) : '', copyCode: () => { try { navigator.clipboard.writeText(ed.code); this.setState({ ed: Object.assign({}, this.state.ed, { ok: 'Código copiado.' }) }); } catch (e) {} },
+        hasNote: true, note: ed.code ? 'Pásale este código a tu pareja. En su teléfono: abre la app → crea su usuario en Ajustes → Nube → luego Ajustes → Pareja → escribe el código → "Unirme". Vence en 24 horas y sirve una sola vez.' : '1) Tú creas un código.  2) Tu pareja lo escribe en su app.  Listo: ambos ven las mismas finanzas. Solo funciona con usuarios que tienen verificación en dos pasos.',
+        formTitle: mem.length ? '' : '¿Tu pareja ya te dio un código?', fields: mem.length ? [] : [fld('join', 'Código de 8 letras', { ph: 'Ej. K7M2-QX9A', ac: 'off' })],
+        saveTxt: ed.code ? 'Crear otro código' : 'Crear código para mi pareja',
+        hasAlt: !mem.length, altTxt: ed.confirmJoin ? 'Confirmar: unirme' : 'Unirme con este código', alt: () => this.unirme() });
     }
     if (k === 'meta') return Object.assign(base, { title: 'Mi meta de ahorro', sub: 'Fija cuánto quieres guardar cada mes. Lo que abones a tus cerditos cuenta para esta meta.', formTitle: 'Meta mensual',
       fields: [money('metaMensual', '¿Cuánto quieres ahorrar al mes?', { hint: 'Tu ingreso de este mes: ' + f(this.per('m').ingreso) + '. Como referencia, el 20% sería ' + f(this.per('m').ingreso * 0.2) + '.' })], saveTxt: 'Guardar meta' });

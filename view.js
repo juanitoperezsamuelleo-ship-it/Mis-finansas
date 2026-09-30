@@ -124,7 +124,7 @@ ${(v.isGastos) ? html`
   ${(v.isTarjetas) ? html`
   <div class="screen" style="display: flex; flex-direction: column; gap: 14px">
     ${((v.tj) || []).map((t, $index) => html`
-      <div class="cc glass st" style=${"animation-delay: " + (t.delay) + "ms; background: " + (t.bg)}>
+      <div onClick=${t.open} tabindex="0" role="button" class="cc glass st" style=${"animation-delay: " + (t.delay) + "ms; background: " + (t.bg)}>
         <div style="display: flex; justify-content: space-between; align-items: center"><b style="font-family: 'Sora', sans-serif; font-size: 17px">${t.name}</b><span style="font-size: 13px; letter-spacing: 2px; color: rgba(var(--wc),.75)">${t.last}</span></div>
         <div>
           <div style="font-size: 12px; color: rgba(var(--wc),.7)">Usado de ${t.cupoTxt}</div>
@@ -260,7 +260,7 @@ ${(v.sheetOn) ? html`
     <label for="nb-monto" style="display: block; font-size: 12.5px; color: rgba(var(--fgc),.6); margin-top: 10px">Monto</label>
     <input id="nb-monto" value=${v.mv.monto} onInput=${v.mvMonto} inputmode="numeric" placeholder="$ 0" style="width: 100%; background: none; border: 0; outline: none; font-family: 'Sora', sans-serif; font-size: 40px; font-weight: 600; padding: 4px 0 10px; border-bottom: 1px solid rgba(var(--wc),.15)" />
     <div style="font-size: 12.5px; color: rgba(var(--fgc),.6); margin-top: 16px">Categoría</div>
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.addCats) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.addCats) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvCuotasOn) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">¿A cuántas cuotas?</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvCuotas) || []).map((cq, $index) => html`<button class=${"chip " + (cq.cls)} onClick=${cq.pick}>${cq.label}</button>`)}</div><div style="font-size: 12.5px; opacity: .7; margin-top: 8px">${v.mvCuotaTxt}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
     <label for="nb-nota" style="display: block; font-size: 12.5px; color: rgba(var(--fgc),.6); margin-top: 16px">Nota</label>
     <input id="nb-nota" value=${v.mv.nota} onInput=${v.mvNota} placeholder="Ej. almuerzo con el equipo" style="width: 100%; height: 48px; margin-top: 6px; padding: 0 16px; border-radius: 16px; background: rgba(var(--wc),.06); border: 1px solid rgba(var(--wc),.12); outline: none" />
     <button onClick=${v.save} style="width: 100%; height: 56px; margin-top: 20px; border-radius: 20px; background: var(--fg); color: var(--bg); font-weight: 800; font-size: 16px">Guardar</button>
@@ -380,7 +380,7 @@ ${(v.isGastos) ? html`
   ${(v.isTarjetas) ? html`
   <div class="screen" style="display: flex; flex-direction: column; gap: 10px">
     ${((v.tj) || []).map((t, $index) => html`
-      <div class="pop" style=${"border-radius: 26px; padding: 20px; background: " + (t.solid) + "; color: #0f0f0d; animation-delay: " + (t.delay) + "ms"}>
+      <div onClick=${t.open} tabindex="0" role="button" class="pop" style=${"border-radius: 26px; padding: 20px; background: " + (t.solid) + "; color: #0f0f0d; animation-delay: " + (t.delay) + "ms"}>
         <div style="display: flex; justify-content: space-between; font-weight: 800"><span class="U" style="font-size: 16px">${t.name}</span><span style="letter-spacing: 2px">${t.last}</span></div>
         <div class="U" style="font-size: 30px; font-weight: 800; letter-spacing: -1.5px; margin-top: 22px">${t.usedTxt}</div>
         <div style="font-size: 12.5px; font-weight: 700; margin-top: 2px">usado de ${t.cupoTxt} · disponible ${t.dispTxt}</div>
@@ -491,7 +491,7 @@ ${(v.sheetOn) ? html`
     <div style="display: flex; justify-content: space-between; align-items: center"><b class="U" style="font-size: 20px">Nuevo gasto</b><button onClick=${v.closeSheet} aria-label="Cerrar" style="width: 44px; height: 44px; border-radius: 14px; background: var(--line); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
     <label for="vt-monto" style="display: block; font-size: 12px; font-weight: 800; color: var(--mut); margin-top: 14px">MONTO</label>
     <input id="vt-monto" value=${v.mv.monto} onInput=${v.mvMonto} inputmode="numeric" placeholder="$ 0" class="U" style="width: 100%; background: none; border: 0; outline: none; font-size: 40px; font-weight: 800; letter-spacing: -1.5px; padding: 4px 0 8px; border-bottom: 2px solid #d6ff3d" />
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px">${((v.addCats) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px">${((v.addCats) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvCuotasOn) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">¿A cuántas cuotas?</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvCuotas) || []).map((cq, $index) => html`<button class=${"chip " + (cq.cls)} onClick=${cq.pick}>${cq.label}</button>`)}</div><div style="font-size: 12.5px; opacity: .7; margin-top: 8px">${v.mvCuotaTxt}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
     <label for="vt-nota" style="display: block; font-size: 12px; font-weight: 800; color: var(--mut); margin-top: 16px">NOTA</label>
     <input id="vt-nota" value=${v.mv.nota} onInput=${v.mvNota} placeholder="Ej. almuerzo" style="width: 100%; height: 50px; margin-top: 6px; padding: 0 16px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); outline: none" />
     <button onClick=${v.save} style="width: 100%; height: 58px; margin-top: 18px; border-radius: 18px; background: #d6ff3d; color: #0f0f0d; font-weight: 800; font-size: 16px">GUARDAR</button>
@@ -603,7 +603,7 @@ ${(v.isGastos) ? html`
   ${(v.isTarjetas) ? html`
   <div class="screen" style="margin-top: 16px; display: flex; flex-direction: column; gap: 14px">
     ${((v.tj) || []).map((t, $index) => html`
-      <div class="fu" style=${"border: 1.5px solid var(--ink); padding: 16px; background: var(--card); animation-delay: " + (t.delay) + "ms"}>
+      <div onClick=${t.open} tabindex="0" role="button" class="fu" style=${"border: 1.5px solid var(--ink); padding: 16px; background: var(--card); animation-delay: " + (t.delay) + "ms"}>
         <div style="display: flex; justify-content: space-between; align-items: baseline"><span class="F" style="font-size: 20px; font-weight: 500">${t.name}</span><span style="font-size: 13px; color: var(--mut); letter-spacing: 1.5px">${t.last}</span></div>
         <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 10px"><span class="F" style="font-size: 30px; font-weight: 300">${t.usedTxt}</span><span style="font-size: 13px; color: var(--mut)">de ${t.cupoTxt}</span></div>
         <div class="thin" style="margin-top: 10px"><div class="fill" style=${"height: 100%; width: " + (t.w) + "%; background: var(--t1)"}></div></div>
@@ -700,7 +700,7 @@ ${(v.sheetOn) ? html`
     <div style="display: flex; justify-content: space-between; align-items: center"><span class="F" style="font-size: 26px; font-weight: 300">Anotar un <em style="font-weight: 500">gasto</em></span><button onClick=${v.closeSheet} aria-label="Cerrar" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
     <label for="lb-monto" style="display: block; font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--mut); margin-top: 12px">Monto</label>
     <input id="lb-monto" value=${v.mv.monto} onInput=${v.mvMonto} inputmode="numeric" placeholder="$ 0" class="F" style="width: 100%; background: none; border: 0; outline: none; font-size: 40px; font-weight: 300; padding: 2px 0 8px; border-bottom: 1.5px solid var(--ink)" />
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px">${((v.addCats) || []).map((a, $index) => html`<button class=${"pill " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"pill " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px">${((v.addCats) || []).map((a, $index) => html`<button class=${"pill " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"pill " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvCuotasOn) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">¿A cuántas cuotas?</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvCuotas) || []).map((cq, $index) => html`<button class=${"pill " + (cq.cls)} onClick=${cq.pick}>${cq.label}</button>`)}</div><div style="font-size: 12.5px; opacity: .7; margin-top: 8px">${v.mvCuotaTxt}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
     <label for="lb-nota" style="display: block; font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--mut); margin-top: 16px">Nota al margen</label>
     <input id="lb-nota" value=${v.mv.nota} onInput=${v.mvNota} placeholder="Ej. almuerzo con el equipo" class="F" style="width: 100%; height: 46px; background: none; border: 0; border-bottom: 1px solid var(--r4); outline: none; font-style: italic; font-size: 17px" />
     <button onClick=${v.save} style="width: 100%; height: 56px; margin-top: 20px; background: var(--ink); color: var(--paper); font-weight: 700; font-size: 15px; letter-spacing: 1px; text-transform: uppercase">Anotar</button>
@@ -832,7 +832,7 @@ ${(v.isGastos) ? html`
   ${(v.isTarjetas) ? html`
   <div class="screen" style="display: flex; flex-direction: column; gap: 12px">
     ${((v.tj) || []).map((t, $index) => html`
-      <div class="oc chunk pop" style=${"background: " + (t.solid) + "; padding: 18px; border-radius: 26px; animation-delay: " + (t.delay) + "ms"}>
+      <div onClick=${t.open} tabindex="0" role="button" class="oc chunk pop" style=${"background: " + (t.solid) + "; padding: 18px; border-radius: 26px; animation-delay: " + (t.delay) + "ms"}>
         <div style="display: flex; justify-content: space-between; font-weight: 900"><span class="B" style="font-size: 18px">${t.name}</span><span>${t.last}</span></div>
         <div class="B" style="font-size: 28px; font-weight: 800; margin-top: 14px">${t.usedTxt}</div>
         <div style="font-size: 13px; font-weight: 800">de ${t.cupoTxt} · pagas el ${t.pago}</div>
@@ -956,7 +956,7 @@ ${(v.sheetOn) ? html`
     <div style="display: flex; justify-content: space-between; align-items: center"><span class="B" style="font-size: 24px; font-weight: 800">¿Qué gastaste?</span><button class="cd chunk" onClick=${v.closeSheet} aria-label="Cerrar" style="width: 44px; height: 44px; border-radius: 14px; background: var(--card); display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 var(--line)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
     <label for="al-monto" style="display: block; font-size: 12.5px; font-weight: 900; margin-top: 14px">MONTO</label>
     <input id="al-monto" value=${v.mv.monto} onInput=${v.mvMonto} inputmode="numeric" placeholder="$ 0" class="B chunk" style="width: 100%; height: 72px; margin-top: 6px; padding: 0 16px; background: var(--card); outline: none; font-size: 34px; font-weight: 800; box-shadow: 0 4px 0 var(--line)" />
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px">${((v.addCats) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px">${((v.addCats) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>${(v.mvHasTargets) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">${v.mvTargetLbl}</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvTargets) || []).map((a, $index) => html`<button class=${"chip " + (a.cls)} onClick=${a.pick}>${a.label}</button>`)}</div>` : null}${(v.mvCuotasOn) ? html`<div style="font-size: 12.5px; opacity: .7; margin-top: 12px">¿A cuántas cuotas?</div><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px">${((v.mvCuotas) || []).map((cq, $index) => html`<button class=${"chip " + (cq.cls)} onClick=${cq.pick}>${cq.label}</button>`)}</div><div style="font-size: 12.5px; opacity: .7; margin-top: 8px">${v.mvCuotaTxt}</div>` : null}${(v.mvHasErr) ? html`<div style="margin-top: 10px; font-size: 13px; font-weight: 700; color: #e5484d">${v.mvErr}</div>` : null}
     <label for="al-nota" style="display: block; font-size: 12.5px; font-weight: 900; margin-top: 16px">NOTA</label>
     <input id="al-nota" value=${v.mv.nota} onInput=${v.mvNota} placeholder="Ej. almuerzo" style="width: 100%; height: 50px; margin-top: 6px; padding: 0 16px; border-radius: 16px; border: 2px solid var(--line); background: var(--card); outline: none; font-weight: 700" />
     <button class="oc chunk" onClick=${v.save} style="width: 100%; height: 60px; margin-top: 18px; background: #ff6f91; font-weight: 900; font-size: 17px">¡Guardar!</button>
@@ -1156,6 +1156,7 @@ ${(v.edOn) ? html`
 
       ${(v.ed.hasForm) ? html`
         <div class="ap-lbl">${v.ed.formTitle}</div>
+        ${(v.ed.hasCode) ? html`<div class="pair-code">${v.ed.code}</div><button class="ap-alt" style="margin: 0 0 10px" onClick=${v.ed.copyCode}>${v.ed.copyCodeTxt}</button>` : null}
         ${(v.ed.hasNote) ? html`<div class="ed-note">${v.ed.note}</div>` : null}
         ${(v.ed.hasQr) ? html`
           <div class="qr-box">
@@ -1180,7 +1181,7 @@ ${(v.edOn) ? html`
         ${(v.ed.hasMeter) ? html`<div class="pw-meter"><span style=${"width: " + (v.ed.meterW) + "%; background: " + (v.ed.meterC)}></span></div><div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">${v.ed.meterTxt}</div>` : null}
         ${(v.ed.hasOk) ? html`<div class="ap-ok">${v.ed.ok}</div>` : null}
         ${(v.ed.hasErr) ? html`<div class="ap-err">${v.ed.err}</div>` : null}
-        <button class=${v.ed.saveCls} onClick=${v.ed.save}>${v.ed.saveTxt}</button>
+        ${(v.ed.hasSave) ? html`<button class=${v.ed.saveCls} onClick=${v.ed.save}>${v.ed.saveTxt}</button>` : null}
         ${(v.ed.hasAlt) ? html`<button class="ap-alt" onClick=${v.ed.alt}>${v.ed.altTxt}</button>` : null}
         ${(v.ed.hasAlt2) ? html`<button class="ap-alt danger-t" onClick=${v.ed.alt2}>${v.ed.alt2Txt}</button>` : null}
         ${(v.ed.hasCancelEdit) ? html`<button class="ap-alt" onClick=${v.ed.cancelEdit}>Cancelar edición</button>` : null}
@@ -1379,6 +1380,59 @@ ${(v.crOn) ? html`
       <button class="ap-go" onClick=${v.crv.guardar}>Guardar cambios</button>
       <button class="ap-alt danger-t" onClick=${v.crv.eliminar}>${v.crv.delTxt}</button>
       ` : null}
+    </div>
+  </div>
+` : null}
+
+${(v.tjOn) ? html`
+  <div class="ap-scrim" onClick=${v.tjv.close}></div>
+  <div class="ap tall" role="dialog" aria-label=${"Tarjeta " + (v.tjv.name)}>
+    <div style="width: 40px; height: 5px; border-radius: 9px; background: var(--apline); margin: 0 auto 12px; flex-shrink: 0"></div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-shrink: 0">
+      <div style="min-width: 0"><div style="font-family: 'Sora', sans-serif; font-size: 21px; font-weight: 600">${v.tjv.name}</div><div style="font-size: 13px; color: var(--apmut); margin-top: 3px">${v.tjv.sub}</div></div>
+      <button onClick=${v.tjv.close} aria-label="Cerrar" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: var(--apcard); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="as-scroll">
+      <div style="margin-top: 14px; font-family: 'Sora', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -.5px">${v.tjv.falta}</div>
+      <div style="font-size: 13px; color: var(--apmut)">${v.tjv.faltaLbl}</div>
+      <div class="ed-note" style="margin-top: 10px">${v.tjv.extTxt}</div>
+      <div class="cr-grid">
+        <div><span>Deuda total</span><b>${v.tjv.deuda}</b><i>disponible ${v.tjv.disp}</i></div>
+        <div><span>Próximo extracto</span><b>${v.tjv.proximo}</b><i>${v.tjv.ncTxt}</i></div>
+        <div style="grid-column: 1 / -1"><span>Cupo usado</span><div class="pw-meter" style="height: 10px; margin-top: 6px"><span style=${"width: " + (v.tjv.w) + "%; background: #6fa8ff"}></span></div><i style="margin-top: 4px">Cuotas que aún no te cobran: ${v.tjv.pendiente}</i></div>
+      </div>
+      ${(v.tjv.hasInicial) ? html`<div class="ed-note" style="margin-top: 8px">${v.tjv.inicialTxt}</div>` : null}
+
+      <div class="ap-lbl">Registrar pago</div>
+      <label class="ap-fl" for="tjv-monto" style="margin-top: 0">¿Cuánto pagaste?</label>
+      <input id="tjv-monto" class="ap-in" inputmode="numeric" placeholder=${v.tjv.ph} value=${v.tjv.monto} onInput=${v.tjv.setMonto} style="font-size: 22px; height: 56px" />
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px">${((v.tjv.quick) || []).map((qq, $index) => html`<button class="ap-chip" onClick=${qq.pick}>${qq.label}</button>`)}</div>
+      <label class="ap-fl" for="tjv-fecha">Fecha del pago</label>
+      <input id="tjv-fecha" class="ap-in" type="date" value=${v.tjv.fecha} onInput=${v.tjv.setFecha} />
+      ${(v.tjv.hasErr) ? html`<div class="ap-err">${v.tjv.err}</div>` : null}
+      ${(v.tjv.hasOk) ? html`<div class="ap-ok">${v.tjv.ok}</div>` : null}
+      <button class="ap-go" onClick=${v.tjv.pagar}>Registrar pago</button>
+
+      <div class="ap-lbl">Compras a cuotas</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        ${((v.tjv.dif) || []).map((df, $index) => html`
+          <div class="ed-item" style="flex-direction: column; align-items: stretch; gap: 6px">
+            <div style="display: flex; justify-content: space-between; gap: 8px"><b style="font-size: 14.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${df.name}</b><b style="font-size: 14.5px; flex-shrink: 0">${df.cuota}</b></div>
+            <div style="display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--apmut)"><span>${df.sub}</span><span style="flex-shrink: 0">${df.falta}</span></div>
+            <div class="pw-meter" style="margin-top: 2px"><span style=${"width: " + (df.w) + "%; background: #6fa8ff"}></span></div>
+          </div>
+        `)}
+      </div>
+      ${(v.tjv.noDif) ? html`<div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">No tienes compras diferidas pendientes. Al registrar una compra con esta tarjeta eliges a cuántas cuotas.</div>` : null}
+
+      <div class="ap-lbl">Movimientos</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        ${((v.tjv.hist) || []).map((hm, $index) => html`
+          <div class="ed-item"><div style="flex: 1; min-width: 0"><div style="font-weight: 800; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${hm.t}</div><div style="font-size: 12px; color: var(--apmut); margin-top: 2px">${hm.sub}</div></div><b style=${"font-size: 14.5px; color: " + (hm.color) + "; flex-shrink: 0"}>${hm.v}</b></div>
+        `)}
+      </div>
+      ${(v.tjv.noHist) ? html`<div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">Sin movimientos todavía.</div>` : null}
+      <button class="ap-alt" style="margin-top: 16px" onClick=${v.tjv.editar}>Editar tarjeta (cupo, corte, pago)</button>
     </div>
   </div>
 ` : null}
