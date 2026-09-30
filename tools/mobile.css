@@ -83,3 +83,8 @@ html,body{margin:0;height:100%;background:#000;overscroll-behavior:none;-webkit-
 .lk-key{width:var(--lkk)!important;height:var(--lkk)!important;padding:0!important;border:0!important;font-family:'Sora',sans-serif!important;font-variant-numeric:tabular-nums;line-height:1!important;color:var(--apfg)!important}
 .lk-key.ghost{color:var(--apfg)!important}
 .lk-bio{padding:0 18px!important;border:1px solid var(--apline)!important;background:transparent}
+.cr-tabs{display:flex;gap:4px;padding:4px;border-radius:16px;background:var(--apcard);margin-top:16px}
+.cr-tabs button{flex:1;height:42px;border-radius:12px;font-weight:800!important;font-size:13.5px;color:var(--apmut);text-align:center!important;padding:0!important;transition:background .2s,color .2s}
+.cr-tabs button.on{background:var(--apfg)!important;color:var(--apbg)!important}
+.cr-estado{margin-top:14px;padding:12px 14px;border-radius:14px;font-weight:800;font-size:14px;background:rgba(245,165,36,.14);color:#c47f0a}
+.cr-estado.ok{background:rgba(34,181,115,.13);color:#169a5a}

@@ -1303,8 +1303,34 @@ ${(v.crOn) ? html`
       </div>
       ${(v.crv.hasAhorro) ? html`<div class="ap-ok">${v.crv.ahorroTxt}</div>` : null}
 
+      <div class="cr-tabs">${((v.crv.tabs) || []).map((tb, $index) => html`<button class=${tb.cls} onClick=${tb.pick}>${tb.label}</button>`)}</div>
+      ${(v.crv.tCuota) ? html`
+      <div class=${"cr-estado " + (v.crv.estadoCls)}>${v.crv.estadoTxt}</div>
+      <label class="ap-fl" for="crv-pmonto">¿Cuánto pagaste?</label>
+      <input id="crv-pmonto" class="ap-in" inputmode="numeric" placeholder=${v.crv.pPh} value=${v.crv.pMonto} onInput=${v.crv.setPMonto} style="font-size: 22px; height: 56px" />
+      <div style="font-size: 12px; color: var(--apmut); margin-top: 6px">Si lo dejas vacío uso tu cuota: $ ${v.crv.pPh} (con seguros).</div>
+      <label class="ap-fl" for="crv-pfecha">Fecha del pago</label>
+      <input id="crv-pfecha" class="ap-in" type="date" value=${v.crv.pFecha} onInput=${v.crv.setPFecha} />
+      <button class=${"ap-chip " + (v.crv.pGastoCls)} style="margin-top: 10px; width: 100%" onClick=${v.crv.togglePGasto}>${v.crv.pGastoTxt}</button>
+      ${(v.crv.hasErr) ? html`<div class="ap-err">${v.crv.err}</div>` : null}
+      ${(v.crv.hasOk) ? html`<div class="ap-ok">${v.crv.ok}</div>` : null}
+      <button class="ap-go" onClick=${v.crv.pagar}>${v.crv.pagarTxt}</button>
+      <div class="ap-lbl">Cuotas pagadas</div>
+      <div style="font-size: 12.5px; color: var(--apmut); margin: -4px 2px 8px">${v.crv.pagosTxt}</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        ${((v.crv.pagos) || []).map((cp, $index) => html`
+          <div class="ed-item">
+            <span style="width: 10px; height: 36px; border-radius: 6px; flex-shrink: 0; background: #5b8def"></span>
+            <div style="flex: 1; min-width: 0"><div style="font-weight: 800; font-size: 14.5px">${cp.vTxt}</div><div style="font-size: 12px; color: var(--apmut); margin-top: 2px">${cp.sub}</div></div>
+            <button class=${"ed-btn " + (cp.delCls)} onClick=${cp.del} aria-label="Eliminar pago">${cp.delTxt}</button>
+          </div>
+        `)}
+      </div>
+      ${(v.crv.noPagos) ? html`<div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">Aún no has registrado pagos de cuota.</div>` : null}
+      ` : null}
+      ${(v.crv.tAbono) ? html`
       ${(v.crv.pagado) ? html`<div class="ap-ok">¡Este crédito ya está pagado! 🎉</div>` : null}
-      <div class="ap-lbl">Abono extra a capital</div>
+      <div class="ed-note" style="margin-top: 16px">Un abono extra va directo a capital: baja el saldo y te ahorra intereses.</div>
       <label class="ap-fl" for="crv-monto" style="margin-top: 0">¿Cuánto vas a abonar?</label>
       <input id="crv-monto" class="ap-in" inputmode="numeric" placeholder="$ 0" value=${v.crv.monto} onInput=${v.crv.setMonto} style="font-size: 22px; height: 56px" />
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px">${((v.crv.quick) || []).map((qq, $index) => html`<button class="ap-chip" onClick=${qq.pick}>${qq.label}</button>`)}</div>
@@ -1319,7 +1345,6 @@ ${(v.crOn) ? html`
       ${(v.crv.hasErr) ? html`<div class="ap-err">${v.crv.err}</div>` : null}
       ${(v.crv.hasOk) ? html`<div class="ap-ok">${v.crv.ok}</div>` : null}
       <button class="ap-go" onClick=${v.crv.abonar}>Abonar a capital</button>
-      <button class="ap-alt" onClick=${v.crv.pagarCuota}>${v.crv.cuotaBtn}</button>
 
       <div class="ap-lbl">Abonos hechos</div>
       <div style="display: flex; flex-direction: column; gap: 8px">
@@ -1333,6 +1358,8 @@ ${(v.crOn) ? html`
       </div>
       ${(v.crv.noAbonos) ? html`<div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">Aún no has hecho abonos extra.</div>` : null}
 
+      ` : null}
+      ${(v.crv.tEditar) ? html`
       <div class="ap-lbl">Datos del crédito</div>
       <label class="ap-fl" for="crv-name" style="margin-top: 0">Nombre</label>
       <input id="crv-name" class="ap-in" value=${v.crv.fName} onInput=${v.crv.setName} />
@@ -1347,8 +1374,11 @@ ${(v.crOn) ? html`
       <label class="ap-fl" for="crv-cargos">Seguros y otros cargos al mes</label>
       <input id="crv-cargos" class="ap-in" inputmode="numeric" placeholder="$ 0" value=${v.crv.fCargos} onInput=${v.crv.setCargos} />
       <div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">${v.crv.cargosHint}</div>
+      ${(v.crv.hasErr) ? html`<div class="ap-err">${v.crv.err}</div>` : null}
+      ${(v.crv.hasOk) ? html`<div class="ap-ok">${v.crv.ok}</div>` : null}
       <button class="ap-go" onClick=${v.crv.guardar}>Guardar cambios</button>
       <button class="ap-alt danger-t" onClick=${v.crv.eliminar}>${v.crv.delTxt}</button>
+      ` : null}
     </div>
   </div>
 ` : null}
