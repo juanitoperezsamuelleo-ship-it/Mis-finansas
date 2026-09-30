@@ -94,15 +94,30 @@ const PLANS = { con: { n: 'Suave', p: 0.10 }, bal: { n: 'Balanceado', p: 0.20 },
 function credCalc(c, today) {
   const P = c.monto, n = Math.max(1, c.plazo);
   const i = c.tipo === 'mv' ? c.tasa / 100 : Math.pow(1 + c.tasa / 100, 1 / 12) - 1;
-  const cuota = i > 0 ? P * i / (1 - Math.pow(1 + i, -n)) : P / n;
+  const pmt = (b, r) => (i > 0 ? b * i / (1 - Math.pow(1 + i, -r)) : b / r);
+  const cuota0 = pmt(P, n);
   const [y, m] = String(c.inicio).split('-').map(Number);
   const el = (today.getFullYear() - y) * 12 + (today.getMonth() + 1 - m);
-  const k = Math.max(0, Math.min(n, el));
-  let saldo = k >= n ? 0 : (i > 0 ? P * Math.pow(1 + i, k) - cuota * (Math.pow(1 + i, k) - 1) / i : P - cuota * k);
-  saldo = Math.max(0, saldo);
-  const endIdx = (m - 1) + n;
-  const ea = c.tipo === 'mv' ? (Math.pow(1 + i, 12) - 1) * 100 : c.tasa;
-  return { i, cuota, k, n, saldo, totalInt: cuota * n - P, restInt: Math.max(0, cuota * (n - k) - saldo), endTxt: MES[endIdx % 12] + ' ' + (y + Math.floor(endIdx / 12)), iniTxt: MES[m - 1] + ' ' + y, ea };
+  const idx = (f) => { const [a, b] = String(f).split('-').map(Number); return Math.max(0, (a - y) * 12 + (b - m)); };
+  const ab = (c.abonos || []).map((a) => Object.assign({ j: idx(a.fecha) }, a)).sort((a, b) => a.j - b.j || (a.ts || 0) - (b.ts || 0));
+  let b = P, cuota = cuota0, jj = 0, a = 0, extra = 0;
+  const bal = [], cuo = [], intAt = [0];
+  const apply = (upTo) => { while (a < ab.length && ab[a].j <= upTo) { const v = Math.min(b, ab[a].monto); b -= v; extra += v; if (ab[a].modo === 'cuota' && b > 0.5 && n - jj > 0) cuota = pmt(b, n - jj); a++; } };
+  apply(0); bal.push(b); cuo.push(cuota);
+  let tot = 0;
+  while (b > 0.5 && jj < 1200) {
+    const it = b * i, pay = Math.min(cuota, b + it); b = Math.max(0, b + it - pay); tot += it; jj++;
+    apply(jj); if (b <= 0.5) b = 0;
+    bal.push(b); cuo.push(cuota); intAt.push(tot);
+  }
+  apply(1e9);
+  const N = Math.max(jj, ab.length && b === 0 && jj === 0 ? 0 : jj), k = Math.max(0, Math.min(N, el));
+  const saldo = N === 0 ? 0 : bal[k], cuotaNow = cuo[Math.min(k, cuo.length - 1)];
+  const endIdx = (m - 1) + N, ea = c.tipo === 'mv' ? (Math.pow(1 + i, 12) - 1) * 100 : c.tasa;
+  const baseInt = cuota0 * n - P;
+  const cargos = Math.max(0, +c.cargos || 0);
+  return { i, cuota: cuotaNow, cargos, cuotaTot: saldo > 0 ? cuotaNow + cargos : 0, cuota0, k, n: N, n0: n, saldo, totalInt: tot, restInt: Math.max(0, tot - intAt[Math.min(k, intAt.length - 1)]), extra,
+    intAhorro: Math.max(0, baseInt - tot), mesesAhorro: Math.max(0, n - N), endTxt: MES[endIdx % 12] + ' ' + (y + Math.floor(endIdx / 12)), iniTxt: MES[m - 1] + ' ' + y, ea };
 }
 function simExtra(calc, extra) {
   let b = calc.saldo, months = 0, int = 0;
@@ -467,6 +482,77 @@ class App extends Component {
       guardar: () => this.pigSave(), eliminar: () => this.pigDelete(), delPigTxt: pg.confirmDel ? 'Confirmar: eliminar cerdito' : 'Eliminar cerdito',
       close: () => this.setState({ pigSel: null, pg: null }) };
   }
+  openCr(id) {
+    const c = this.state.data.creditos.find((x) => x.id === id); if (!c) return;
+    this.setState({ crSel: id, cr: { monto: '', modo: 'plazo', gasto: true, fecha: iso(new Date()), err: '', ok: '', confirmDel: false, confirmAb: null,
+      name: c.name, cMonto: String(c.monto), cargos: c.cargos ? String(Math.round(c.cargos)) : '', tasa: String(c.tasa).replace('.', ','), tipo: c.tipo, plazo: String(c.plazo), inicio: c.inicio }, sheet: false, panel: false, ed: null });
+  }
+  setCr(o) { this.setState({ cr: Object.assign({}, this.state.cr, o) }); }
+  crAbono() {
+    const cr = this.state.cr, id = this.state.crSel, monto = num(cr.monto);
+    const c = this.state.data.creditos.find((x) => x.id === id), x = credCalc(c, new Date());
+    if (!(monto > 0)) return this.setCr({ err: 'Escribe cuánto vas a abonar.', ok: '' });
+    if (x.saldo <= 0) return this.setCr({ err: 'Este crédito ya está pagado.', ok: '' });
+    if (monto > x.saldo + 1) return this.setCr({ err: 'El abono supera el saldo (' + fmt(x.saldo) + '). Si quieres pagarlo todo, abona ' + fmt(Math.ceil(x.saldo)) + '.', ok: '' });
+    const abId = uid(), fecha = cr.fecha || iso(new Date());
+    this.mut((d) => {
+      d.creditos = d.creditos.map((k) => (k.id === id ? Object.assign({}, k, { abonos: (k.abonos || []).concat([{ id: abId, fecha, ts: Date.now(), monto, modo: cr.modo }]) }) : k));
+      if (cr.gasto) d.movs.push({ id: uid(), fecha, ts: Date.now(), tipo: 'gasto', cat: 'hogar', monto, nota: 'Abono a ' + c.name, credId: id, abonoId: abId });
+    });
+    const y = credCalc(this.state.data.creditos.find((k) => k.id === id), new Date());
+    const msg = cr.modo === 'plazo' ? (y.mesesAhorro > x.mesesAhorro ? 'Terminas en ' + y.endTxt + ' (' + (y.mesesAhorro - x.mesesAhorro) + ' meses antes).' : 'Terminas en ' + y.endTxt + '.') : 'Tu nueva cuota: ' + fmt(y.cuota) + '.';
+    this.setCr({ monto: '', err: '', ok: 'Abonaste ' + fmt(monto) + '. ' + msg + ' Ahorras ' + fmt(y.intAhorro - x.intAhorro) + ' en intereses.' });
+  }
+  crCuota() {
+    const id = this.state.crSel, c = this.state.data.creditos.find((x) => x.id === id), x = credCalc(c, new Date()), mk = iso(new Date()).slice(0, 7);
+    if (x.saldo <= 0) return this.setCr({ err: 'Este crédito ya está pagado.', ok: '' });
+    if (this.state.data.movs.some((m) => m.credId === id && m.cuotaMes === mk)) return this.setCr({ err: 'La cuota de este mes ya está registrada como gasto.', ok: '' });
+    this.mut((d) => d.movs.push({ id: uid(), fecha: iso(new Date()), ts: Date.now(), tipo: 'gasto', cat: 'hogar', monto: Math.round(x.cuotaTot), nota: 'Cuota ' + c.name, credId: id, cuotaMes: mk }));
+    this.setCr({ err: '', ok: 'Cuota de ' + fmt(x.cuotaTot) + ' registrada en tus gastos del mes.' });
+  }
+  crSave() {
+    const cr = this.state.cr, id = this.state.crSel, monto = num(cr.cMonto), tasa = parseFloat(String(cr.tasa).replace(',', '.')), plazo = Math.round(num(cr.plazo));
+    if (!(monto > 0 && tasa > 0 && plazo > 0 && /^\d{4}-\d{2}$/.test(cr.inicio))) return this.setCr({ err: 'Revisa monto, tasa, plazo y fecha de inicio.', ok: '' });
+    this.mut((d) => { d.creditos = d.creditos.map((k) => (k.id === id ? Object.assign({}, k, { name: cr.name.trim() || 'Mi crédito', monto, tasa, tipo: cr.tipo, plazo, cargos: num(cr.cargos || ''), inicio: cr.inicio }) : k)); });
+    this.setCr({ err: '', ok: 'Cambios guardados.' });
+  }
+  crDelete() {
+    const cr = this.state.cr, id = this.state.crSel;
+    if (!cr.confirmDel) return this.setCr({ confirmDel: true, err: 'Toca otra vez para eliminar el crédito. Los gastos ya registrados se conservan.', ok: '' });
+    this.mut((d) => { d.creditos = d.creditos.filter((k) => k.id !== id); });
+    this.setState({ crSel: null, cr: null });
+  }
+  crView() {
+    const s = this.state, D = s.data, id = s.crSel, c = D.creditos.find((x) => x.id === id), cr = s.cr;
+    if (!c || !cr) return null;
+    const x = credCalc(c, new Date()), n = (v) => num(v), prev = n(cr.monto) > 0 && x.saldo > 0 ? credCalc(Object.assign({}, c, { abonos: (c.abonos || []).concat([{ id: 'p', fecha: cr.fecha || iso(new Date()), ts: Date.now(), monto: Math.min(n(cr.monto), x.saldo), modo: cr.modo }]) }), new Date()) : null;
+    const quick = [100000, 200000, 500000, 1000000].map((v) => ({ label: short(v).replace('K', ' mil').replace('M', ' M'), pick: () => this.setCr({ monto: String(v), err: '', ok: '' }) }));
+    const ab = (c.abonos || []).slice().sort((a, b) => (b.fecha > a.fecha ? 1 : b.fecha < a.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
+    const pct = Math.round((1 - x.saldo / c.monto) * 100);
+    return { name: c.name, sub: fmt(c.monto) + ' · ' + pctTxt(c.tasa) + (c.tipo === 'mv' ? ' M.V.' : ' E.A.') + ' · desde ' + x.iniTxt,
+      saldo: fmt(x.saldo), pct: Math.max(0, Math.min(100, pct)), pctTxt: pct + '% pagado', cuota: fmt(x.cuotaTot || x.cuota), cuotaDet: x.cargos > 0 ? fmt(x.cuota) + ' capital e intereses + ' + fmt(x.cargos) + ' de seguros' : 'sin seguros registrados', endTxt: x.endTxt, kTxt: x.k + ' de ' + x.n,
+      restInt: fmt(x.restInt), hasAhorro: x.extra > 0, ahorroTxt: 'Con tus abonos (' + fmt(x.extra) + ') ahorras ' + fmt(x.intAhorro) + ' en intereses' + (x.mesesAhorro ? ' y terminas ' + x.mesesAhorro + (x.mesesAhorro === 1 ? ' mes' : ' meses') + ' antes' : '') + '.',
+      pagado: x.saldo <= 0,
+      monto: n(cr.monto) > 0 ? miles(n(cr.monto)) : '', quick, fecha: cr.fecha,
+      setMonto: (e) => this.setCr({ monto: e.target.value.replace(/\D/g, ''), err: '', ok: '' }), setFecha: (e) => this.setCr({ fecha: e.target.value, ok: '' }),
+      modos: [['plazo', 'Reducir plazo', 'Pagas la misma cuota y terminas antes. Ahorra más intereses.'], ['cuota', 'Reducir cuota', 'Mismo plazo, cuota mensual más baja.']].map(([v, l, d]) => ({ label: l, desc: d, cls: cr.modo === v ? 'on' : '', pick: () => this.setCr({ modo: v }) })),
+      gastoCls: cr.gasto ? 'on' : '', gastoTxt: cr.gasto ? '✓ Descontarlo de mis gastos del mes' : 'Descontarlo de mis gastos del mes', toggleGasto: () => this.setCr({ gasto: !cr.gasto }),
+      hasPrev: !!prev, prevTxt: prev ? (cr.modo === 'plazo' ? 'Terminarías en ' + prev.endTxt + (prev.mesesAhorro > x.mesesAhorro ? ' (' + (prev.mesesAhorro - x.mesesAhorro) + ' meses antes)' : '') : 'Tu cuota bajaría a ' + fmt(prev.cuota)) + ' y ahorrarías ' + fmt(prev.intAhorro - x.intAhorro) + ' en intereses.' : '',
+      abonar: () => this.crAbono(), pagarCuota: () => this.crCuota(), cuotaBtn: 'Registrar la cuota de ' + MESL[new Date().getMonth()] + ' (' + fmt(x.cuotaTot) + ') como gasto',
+      hasErr: !!cr.err, err: cr.err, hasOk: !!cr.ok, ok: cr.ok,
+      abonos: ab.map((a) => ({ vTxt: '− ' + fmt(a.monto) + ' a capital', sub: dayTxt(a.fecha) + ' ' + a.fecha.slice(0, 4) + ' · ' + (a.modo === 'cuota' ? 'redujo la cuota' : 'redujo el plazo'),
+        delTxt: cr.confirmAb === a.id ? '¿Seguro?' : 'Borrar', delCls: cr.confirmAb === a.id ? 'danger' : '',
+        del: () => { if (this.state.cr.confirmAb !== a.id) return this.setCr({ confirmAb: a.id });
+          this.mut((d) => { d.creditos = d.creditos.map((k) => (k.id === id ? Object.assign({}, k, { abonos: (k.abonos || []).filter((z) => z.id !== a.id) }) : k)); d.movs = d.movs.filter((m) => m.abonoId !== a.id); });
+          this.setCr({ confirmAb: null, ok: 'Abono borrado.', err: '' }); } })),
+      noAbonos: !ab.length,
+      fName: cr.name, fMonto: n(cr.cMonto) > 0 ? miles(n(cr.cMonto)) : '', fTasa: cr.tasa, fPlazo: cr.plazo, fInicio: cr.inicio, fCargos: n(cr.cargos) > 0 ? miles(n(cr.cargos)) : '', setCargos: (e) => this.setCr({ cargos: e.target.value.replace(/\D/g, ''), ok: '', err: '' }), cargosHint: 'Sin seguros la cuota es ' + fmt(x.cuota) + '. Si tu extracto cobra más, escribe la diferencia.',
+      tipos: [['ea', 'E.A.'], ['mv', 'M.V.']].map(([v, l]) => ({ label: l, cls: cr.tipo === v ? 'on' : '', pick: () => this.setCr({ tipo: v, ok: '' }) })),
+      setName: (e) => this.setCr({ name: e.target.value, ok: '', err: '' }), setCMonto: (e) => this.setCr({ cMonto: e.target.value.replace(/\D/g, ''), ok: '', err: '' }),
+      setTasa: (e) => this.setCr({ tasa: e.target.value.replace(/[^0-9.,]/g, ''), ok: '', err: '' }), setPlazo: (e) => this.setCr({ plazo: e.target.value.replace(/\D/g, ''), ok: '', err: '' }), setInicio: (e) => this.setCr({ inicio: e.target.value, ok: '' }),
+      guardar: () => this.crSave(), eliminar: () => this.crDelete(), delTxt: cr.confirmDel ? 'Confirmar: eliminar crédito' : 'Eliminar crédito',
+      close: () => this.setState({ crSel: null, cr: null }) };
+  }
   closeEd() {
     const ed = this.state.ed;
     this.setState({ ed: null });
@@ -692,7 +778,7 @@ class App extends Component {
     if (meta > 0 && savedCur < meta) recs.push({ tag: 'Ahorro', tone: 'tip', title: 'Te faltan ' + f(meta - savedCur) + ' para la meta de ' + MESL[new Date().getMonth()], body: 'Programa el traslado a tus cerditos apenas te paguen: lo que se ahorra primero no se gasta.', impact: 'Con eso cumples tu plan ' + PLANS[D.plan].n + ' al 100%' });
     const ingM = this.per('m').ingreso;
     if (activos.length && ingM > 0) {
-      const cuotas = activos.reduce((a, o) => a + o.x.cuota, 0), carga = cuotas / ingM * 100;
+      const cuotas = activos.reduce((a, o) => a + o.x.cuotaTot, 0), carga = cuotas / ingM * 100;
       recs.push({ tag: 'Deuda', tone: carga < 30 ? 'good' : 'warn', title: 'Tus cuotas son el ' + pctTxt(carga) + ' de tu ingreso', body: carga < 30 ? 'Estás por debajo del 30%, un nivel sano. Antes de pedir un crédito nuevo, espera a terminar uno de los actuales.' : 'Pasas del 30% recomendado. Prioriza abonar a la deuda más cara y no tomes créditos nuevos por ahora.', impact: 'Pagas ' + f(cuotas) + ' al mes en cuotas' });
     }
     if (veh && veh.real) {
@@ -724,8 +810,8 @@ class App extends Component {
     }, 480);
     this.t6 = setTimeout(() => this.setState({ morph: null }), 1000);
   }
-  emptyCf() { const d = new Date(); return { name: '', monto: '', tasa: '', tipo: 'ea', plazo: '', inicio: d.getFullYear() + '-' + pad(d.getMonth() + 1) }; }
-  cfParsed() { const cf = this.state.cf; return { name: cf.name.trim() || 'Mi crédito', monto: num(cf.monto), tasa: num(cf.tasa), tipo: cf.tipo, plazo: Math.round(num(cf.plazo)), inicio: cf.inicio }; }
+  emptyCf() { const d = new Date(); return { name: '', monto: '', tasa: '', tipo: 'ea', plazo: '', cargos: '', inicio: d.getFullYear() + '-' + pad(d.getMonth() + 1) }; }
+  cfParsed() { const cf = this.state.cf; return { name: cf.name.trim() || 'Mi crédito', monto: num(cf.monto), tasa: num(cf.tasa), tipo: cf.tipo, plazo: Math.round(num(cf.plazo)), cargos: num(cf.cargos || ''), inicio: cf.inicio }; }
   setCf(k, v) { this.setState({ cf: Object.assign({}, this.state.cf, { [k]: v }) }); }
   saveCred() {
     const c = this.cfParsed();
@@ -806,9 +892,9 @@ class App extends Component {
     const savedCur = saved[mI];
     // créditos
     const credx = D.creditos.map((cr) => ({ c: cr, x: credCalc(cr, now) }));
-    const credits = credx.map((o, i) => ({ name: o.c.name, cuotaTxt: f(o.x.cuota), saldoTxt: f(o.x.saldo), prog: Math.round(o.x.k / o.x.n * 100), kTxt: o.x.k + ' de ' + o.x.n + ' cuotas',
+    const credits = credx.map((o, i) => ({ open: () => this.openCr(o.c.id), name: o.c.name, cuotaTxt: f(o.x.cuotaTot || o.x.cuota), saldoTxt: f(o.x.saldo), prog: Math.round(o.x.k / o.x.n * 100), kTxt: o.x.saldo > 0 ? o.x.k + ' de ' + o.x.n + ' cuotas · toca para abonar' : '¡Pagado!',
       tasaTxt: pctTxt(o.c.tasa) + (o.c.tipo === 'mv' ? ' M.V.' : ' E.A.'), plazoTxt: o.x.n + ' meses', iniTxt: o.x.iniTxt, endTxt: o.x.endTxt, intTxt: f(o.x.totalInt), montoTxt: f(o.c.monto), color: c.cred[i % c.cred.length], delay: 120 + i * 90 }));
-    const act = credx.filter((o) => o.x.saldo > 0), cuotaTot = act.reduce((a, o) => a + o.x.cuota, 0), saldoTot = act.reduce((a, o) => a + o.x.saldo, 0);
+    const act = credx.filter((o) => o.x.saldo > 0), cuotaTot = act.reduce((a, o) => a + o.x.cuotaTot, 0), saldoTot = act.reduce((a, o) => a + o.x.saldo, 0);
     const cp = this.cfParsed(), cfOk = cp.monto > 0 && cp.tasa > 0 && cp.plazo > 0 && /^\d{4}-\d{2}$/.test(cp.inicio), cpx = cfOk ? credCalc(cp, now) : null;
     // asistente
     const q = this.per('q');
@@ -894,14 +980,14 @@ class App extends Component {
       cfTasa: (e) => this.setCf('tasa', e.target.value.replace(/[^0-9.,]/g, '')), cfPlazo: (e) => this.setCf('plazo', e.target.value.replace(/[^0-9]/g, '')), cfInicio: (e) => this.setCf('inicio', e.target.value),
       cfEa: () => this.setCf('tipo', 'ea'), cfMv: () => this.setCf('tipo', 'mv'), cfTipo: { ea: s.cf.tipo === 'ea' ? 'on' : '', mv: s.cf.tipo === 'mv' ? 'on' : '' }, cfTipoX: s.cf.tipo === 'mv' ? 'translateX(100%)' : 'translateX(0%)',
       cfMontoTxt: cp.monto > 0 ? f(cp.monto) : 'Escribe el monto sin puntos', cfOk, cfCls: cfOk ? 'ap-go' : 'ap-go off',
-      cfCuotaTxt: cpx ? f(cpx.cuota) : '—', cfIntTxt: cpx ? f(cpx.totalInt) : '—', cfEndTxt: cpx ? cpx.endTxt : '—', cfKTxt: cpx ? cpx.k + ' de ' + cpx.n : '—', cfSaldoTxt: cpx ? f(cpx.saldo) : '—',
+      cfCargos: s.cf.cargos && num(s.cf.cargos) > 0 ? miles(num(s.cf.cargos)) : '', cfSetCargos: (e) => this.setCf('cargos', e.target.value.replace(/[^0-9]/g, '')), cfBaseTxt: cpx ? 'Sin seguros la cuota sería ' + f(cpx.cuota) + '. Si tu extracto dice más, escribe aquí la diferencia.' : 'Seguro de vida, de todo riesgo, cuota de manejo… lo que el banco suma cada mes.', cfCuotaLbl: cpx && cpx.cargos > 0 ? 'cuota total · ' + f(cpx.cargos) + ' de seguros' : 'cuota mensual', cfCuotaTxt: cpx ? f(cpx.cuotaTot || cpx.cuota) : '—', cfIntTxt: cpx ? f(cpx.totalInt) : '—', cfEndTxt: cpx ? cpx.endTxt : '—', cfKTxt: cpx ? cpx.k + ' de ' + cpx.n : '—', cfSaldoTxt: cpx ? f(cpx.saldo) : '—',
       recs, tip: recs[0], recCount: recs.length, openAsist: () => this.openAsist(), closeAsist: () => this.setState({ asist: false }),
       asistOn: s.asist, asistLoading: s.asist && s.asistStep < 3, asistDone: s.asist && s.asistStep >= 3, asistMsg: ['Revisando tus gastos…', 'Calculando tus créditos…', 'Buscando oportunidades de ahorro…'][Math.min(2, s.asistStep)],
       edOn: !!s.ed, ed: s.ed ? this.edView(credx, cards, pigs) : {}, closeEd: () => this.closeEd(),
       sync: this.syncView(), syncNow: () => this.pull(), logout: () => this.logout(), exportData: () => this.exportData(), importData: (e) => this.importData(e), skipCloud: () => { this.setState({ ed: null }); this.finishWelcome(); },
       movOn: !!movD, movD: movD || {}, closeMov: () => this.setState({ movSel: null, movConfirm: false }),
       logoutAll: () => this.logout(true),
-      pigOn: !!this.pigView(), pg: this.pigView() || {},
+      pigOn: !!this.pigView(), pg: this.pigView() || {}, crOn: !!this.crView(), crv: this.crView() || {},
       lockOn: s.locked, lk: { title: 'Mis Finanzas', msg: s.lockMsg, msgCls: s.lockErr ? 'err' : '', hasBio: lock.hasBio(), bio: () => this.unlockBio(),
         dots: [0, 1, 2, 3, 4, 5].map((i) => ({ cls: i < s.lockPin.length ? 'on' : '' })),
         keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((k) => ({ label: k === 'del' ? '⌫' : k, aria: k === 'del' ? 'Borrar' : (k ? 'Número ' + k : ''), cls: k === '' ? 'hide' : (k === 'del' ? 'ghost' : ''), press: () => k && this.pressKey(k) })) }
@@ -973,7 +1059,7 @@ class App extends Component {
       empty: !D.cerditos.length, emptyTxt: 'Aún no tienes cerditos.', formTitle: editing ? 'Editar cerdito' : 'Nuevo cerdito', saveTxt: editing ? 'Guardar cambios' : 'Crear cerdito',
       fields: [fld('nombre', 'Nombre', { ph: 'Ej. Viaje a Cartagena' }), money('meta', '¿Cuánto quieres ahorrar?'), money('inicial', 'Ya tengo ahorrado (opcional)'), fld('fecha', 'Meta para (opcional)', { type: 'month' })] });
     if (k === 'creditos') return Object.assign(base, { title: 'Créditos', sub: 'Calculo cuota, saldo e intereses con la tasa y el plazo.', hasList: true, listTitle: 'Tus créditos',
-      items: D.creditos.map((cr, i) => Object.assign({ name: cr.name, sub: f(credx[i].x.cuota) + '/mes · ' + credx[i].x.k + ' de ' + credx[i].x.n + ' cuotas', color: '#3cc59a', canEdit: false }, del(cr.id))),
+      items: D.creditos.map((cr, i) => Object.assign({ name: cr.name, sub: f(credx[i].x.cuotaTot || credx[i].x.cuota) + '/mes · saldo ' + f(credx[i].x.saldo), color: '#3cc59a', canEdit: true, edit: () => this.openCr(cr.id) }, del(cr.id))),
       empty: !D.creditos.length, emptyTxt: 'Aún no tienes créditos.', formTitle: '', saveTxt: '+ Agregar crédito' });
     // datos / nube
     const cf = this.state.cloudForm, setC = (key, clean) => (e) => this.setState({ cloudForm: Object.assign({}, this.state.cloudForm, { [key]: clean ? clean(e.target.value) : e.target.value }), ed: Object.assign({}, this.state.ed, { err: '' }) });

@@ -229,7 +229,7 @@ ${(v.isPlan) ? html`
   <div><div style="font-size: 11.5px; color: rgba(var(--fgc),.6)">De tu ingreso</div><b style="font-size: 14.5px; color: var(--a1)">${v.credPctTxt}</b></div>
 </div>
 ${((v.credits) || []).map((k, $index) => html`
-  <div class="glass st" style=${"border-radius: 26px; padding: 18px; animation-delay: " + (k.delay) + "ms"}>
+  <div onClick=${k.open} tabindex="0" role="button" class="glass st" style=${"border-radius: 26px; padding: 18px; animation-delay: " + (k.delay) + "ms"}>
     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px">
       <div><div style="font-size: 15.5px; font-weight: 700">${k.name}</div><div style="font-size: 12px; color: rgba(var(--fgc),.6); margin-top: 2px">${k.montoTxt} · ${k.tasaTxt} · ${k.plazoTxt}</div></div>
       <div style="text-align: right"><b style=${"font-family: 'Sora', sans-serif; font-size: 17px; color: " + (k.color)}>${k.cuotaTxt}</b><div style="font-size: 11px; color: rgba(var(--fgc),.6)">al mes</div></div>
@@ -465,7 +465,7 @@ ${(v.isPlan) ? html`
   <div style="border-radius: 18px; padding: 12px; background: var(--surf); border: 1px solid var(--line)"><div style="font-size: 10.5px; font-weight: 800; color: var(--mut)">DEL INGRESO</div><div class="U" style="font-size: 13px; font-weight: 800; margin-top: 4px">${v.credPctTxt}</div></div>
 </div>
 ${((v.credits) || []).map((k, $index) => html`
-  <div class="pop" style=${"border-radius: 26px; padding: 18px; background: var(--surf); border: 1px solid var(--line); animation-delay: " + (k.delay) + "ms"}>
+  <div onClick=${k.open} tabindex="0" role="button" class="pop" style=${"border-radius: 26px; padding: 18px; background: var(--surf); border: 1px solid var(--line); animation-delay: " + (k.delay) + "ms"}>
     <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 800; font-size: 15px">${k.name}</span><span style=${"font-size: 11.5px; font-weight: 800; padding: 4px 8px; border-radius: 8px; background: " + (k.color) + "; color: #0f0f0d"}>${k.tasaTxt}</span></div>
     <div class="U" style="font-size: 26px; font-weight: 800; letter-spacing: -1px; margin-top: 12px">${k.cuotaTxt}<span style="font-size: 12px; letter-spacing: 0; color: var(--mut)"> /MES</span></div>
     <div style="display: flex; gap: 3px; margin-top: 12px; height: 12px"><div style=${"flex-grow: " + (k.prog) + "; background: " + (k.color) + "; border-radius: 4px"}></div><div style="flex-grow: 100; background: var(--line); border-radius: 4px"></div></div>
@@ -674,7 +674,7 @@ ${(v.isPlan) ? html`
 <p class="F" style="font-size: 18px; font-weight: 300; line-height: 1.4; margin: 8px 0 0">Pagas <em style="color: var(--t1); font-weight: 500">${v.credCuotaTxt}</em> al mes en cuotas —el ${v.credPctTxt} de tu ingreso— y aún debes ${v.credSaldoTxt}.</p>
 <div style="margin-top: 12px; border-top: 1.5px solid var(--ink)">
   ${((v.credits) || []).map((k, $index) => html`
-    <div class="fu" style=${"padding: 14px 0; border-bottom: 1px solid var(--r1); animation-delay: " + (k.delay) + "ms"}>
+    <div onClick=${k.open} tabindex="0" role="button" class="fu" style=${"padding: 14px 0; border-bottom: 1px solid var(--r1); animation-delay: " + (k.delay) + "ms"}>
       <div style="display: flex; justify-content: space-between; align-items: baseline"><span class="F" style="font-size: 20px">${k.name}</span><span class="F" style=${"font-size: 20px; font-style: italic; color: " + (k.color)}>${k.cuotaTxt}</span></div>
       <div style="font-size: 12.5px; color: var(--mut); margin-top: 2px">${k.montoTxt} a ${k.plazoTxt} · ${k.tasaTxt} · desde ${k.iniTxt}</div>
       <div class="thin" style="height: 8px; margin-top: 10px"><div class="fill" style=${"height: 100%; width: " + (k.prog) + "%; background: " + (k.color)}></div></div>
@@ -930,7 +930,7 @@ ${(v.isPlan) ? html`
   <div><div style="font-size: 11px; font-weight: 900">DEL INGRESO</div><div class="B" style="font-size: 15px; font-weight: 800">${v.credPctTxt}</div></div>
 </div>
 ${((v.credits) || []).map((k, $index) => html`
-  <div class="chunk pop cd" style=${"background: var(--card); padding: 16px; animation-delay: " + (k.delay) + "ms"}>
+  <div onClick=${k.open} tabindex="0" role="button" class="chunk pop cd" style=${"background: var(--card); padding: 16px; animation-delay: " + (k.delay) + "ms"}>
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><span class="B" style="font-size: 17px; font-weight: 800">${k.name}</span><span class="oc" style=${"font-size: 12px; font-weight: 900; padding: 3px 8px; border-radius: 10px; border: 2px solid var(--line); background: " + (k.color)}>${k.tasaTxt}</span></div>
     <div class="B" style="font-size: 26px; font-weight: 800; margin-top: 8px">${k.cuotaTxt}<span style="font-size: 13px; font-weight: 800; color: var(--mut)"> al mes</span></div>
     <div style="height: 18px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); margin-top: 10px; overflow: hidden"><div class="fill" style=${"height: 100%; width: " + (k.prog) + "%; background: " + (k.color) + "; border-right: 2px solid var(--line)"}></div></div>
@@ -1112,9 +1112,12 @@ ${(v.credOn) ? html`
           <input id="cr-inicio" class="ap-in" type="month" value=${v.cf.inicio} onInput=${v.cfInicio} />
         </div>
       </div>
+      <label class="ap-fl" for="cr-cargos">Seguros y otros cargos al mes (opcional)</label>
+      <input id="cr-cargos" class="ap-in" inputmode="numeric" placeholder="$ 0" value=${v.cfCargos} onInput=${v.cfSetCargos} />
+      <div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">${v.cfBaseTxt}</div>
       <div class="cr-prev">
         <div style="font-size: 11.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--apmut)">Así queda</div>
-        <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 6px"><span style="font-family: 'Sora', sans-serif; font-size: 28px; font-weight: 600; letter-spacing: -.5px">${v.cfCuotaTxt}</span><span style="font-size: 13px; color: var(--apmut)">cuota mensual</span></div>
+        <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 6px"><span style="font-family: 'Sora', sans-serif; font-size: 28px; font-weight: 600; letter-spacing: -.5px">${v.cfCuotaTxt}</span><span style="font-size: 13px; color: var(--apmut)">${v.cfCuotaLbl}</span></div>
         <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; font-size: 12.5px">
           <div><div style="color: var(--apmut)">Cuotas pagadas</div><b>${v.cfKTxt}</b></div>
           <div><div style="color: var(--apmut)">Saldo hoy</div><b>${v.cfSaldoTxt}</b></div>
@@ -1277,6 +1280,75 @@ ${(v.pigOn) ? html`
       <input id="pg-fecha" class="ap-in" type="month" value=${v.pg.fFecha} onInput=${v.pg.setFecha} />
       <button class="ap-go" onClick=${v.pg.guardar}>Guardar cambios</button>
       <button class="ap-alt danger-t" onClick=${v.pg.eliminar}>${v.pg.delPigTxt}</button>
+    </div>
+  </div>
+` : null}
+
+${(v.crOn) ? html`
+  <div class="ap-scrim" onClick=${v.crv.close}></div>
+  <div class="ap tall" role="dialog" aria-label=${"Crédito " + (v.crv.name)}>
+    <div style="width: 40px; height: 5px; border-radius: 9px; background: var(--apline); margin: 0 auto 12px; flex-shrink: 0"></div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-shrink: 0">
+      <div style="min-width: 0"><div style="font-family: 'Sora', sans-serif; font-size: 21px; font-weight: 600">${v.crv.name}</div><div style="font-size: 13px; color: var(--apmut); margin-top: 3px">${v.crv.sub}</div></div>
+      <button onClick=${v.crv.close} aria-label="Cerrar" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: var(--apcard); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="as-scroll">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px"><span style="font-family: 'Sora', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -.5px">${v.crv.saldo}</span><span style="font-size: 13px; color: var(--apmut)">${v.crv.pctTxt}</span></div>
+      <div style="font-size: 12.5px; color: var(--apmut)">saldo de hoy</div>
+      <div class="pw-meter" style="height: 12px"><span style=${"width: " + (v.crv.pct) + "%; background: #3cc59a"}></span></div>
+      <div class="cr-grid">
+        <div><span>Cuota mensual</span><b>${v.crv.cuota}</b><i>${v.crv.cuotaDet}</i></div>
+        <div><span>Terminas en</span><b>${v.crv.endTxt}</b><i>${v.crv.kTxt} cuotas</i></div>
+        <div style="grid-column: 1 / -1"><span>Intereses que te faltan por pagar</span><b>${v.crv.restInt}</b></div>
+      </div>
+      ${(v.crv.hasAhorro) ? html`<div class="ap-ok">${v.crv.ahorroTxt}</div>` : null}
+
+      ${(v.crv.pagado) ? html`<div class="ap-ok">¡Este crédito ya está pagado! 🎉</div>` : null}
+      <div class="ap-lbl">Abono extra a capital</div>
+      <label class="ap-fl" for="crv-monto" style="margin-top: 0">¿Cuánto vas a abonar?</label>
+      <input id="crv-monto" class="ap-in" inputmode="numeric" placeholder="$ 0" value=${v.crv.monto} onInput=${v.crv.setMonto} style="font-size: 22px; height: 56px" />
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px">${((v.crv.quick) || []).map((qq, $index) => html`<button class="ap-chip" onClick=${qq.pick}>${qq.label}</button>`)}</div>
+      <div class="ap-fl">¿Qué quieres que haga el banco?</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        ${((v.crv.modos) || []).map((mo, $index) => html`<button class=${"cr-mode " + (mo.cls)} onClick=${mo.pick}><b>${mo.label}</b><span>${mo.desc}</span></button>`)}
+      </div>
+      <label class="ap-fl" for="crv-fecha">Fecha del abono</label>
+      <input id="crv-fecha" class="ap-in" type="date" value=${v.crv.fecha} onInput=${v.crv.setFecha} />
+      <button class=${"ap-chip " + (v.crv.gastoCls)} style="margin-top: 10px; width: 100%" onClick=${v.crv.toggleGasto}>${v.crv.gastoTxt}</button>
+      ${(v.crv.hasPrev) ? html`<div class="ed-note" style="margin-top: 10px">${v.crv.prevTxt}</div>` : null}
+      ${(v.crv.hasErr) ? html`<div class="ap-err">${v.crv.err}</div>` : null}
+      ${(v.crv.hasOk) ? html`<div class="ap-ok">${v.crv.ok}</div>` : null}
+      <button class="ap-go" onClick=${v.crv.abonar}>Abonar a capital</button>
+      <button class="ap-alt" onClick=${v.crv.pagarCuota}>${v.crv.cuotaBtn}</button>
+
+      <div class="ap-lbl">Abonos hechos</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        ${((v.crv.abonos) || []).map((ca, $index) => html`
+          <div class="ed-item">
+            <span style="width: 10px; height: 36px; border-radius: 6px; flex-shrink: 0; background: #3cc59a"></span>
+            <div style="flex: 1; min-width: 0"><div style="font-weight: 800; font-size: 14.5px">${ca.vTxt}</div><div style="font-size: 12px; color: var(--apmut); margin-top: 2px">${ca.sub}</div></div>
+            <button class=${"ed-btn " + (ca.delCls)} onClick=${ca.del} aria-label="Eliminar abono">${ca.delTxt}</button>
+          </div>
+        `)}
+      </div>
+      ${(v.crv.noAbonos) ? html`<div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">Aún no has hecho abonos extra.</div>` : null}
+
+      <div class="ap-lbl">Datos del crédito</div>
+      <label class="ap-fl" for="crv-name" style="margin-top: 0">Nombre</label>
+      <input id="crv-name" class="ap-in" value=${v.crv.fName} onInput=${v.crv.setName} />
+      <label class="ap-fl" for="crv-cmonto">Monto prestado</label>
+      <input id="crv-cmonto" class="ap-in" inputmode="numeric" value=${v.crv.fMonto} onInput=${v.crv.setCMonto} />
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div><label class="ap-fl" for="crv-tasa">Tasa %</label><input id="crv-tasa" class="ap-in" inputmode="decimal" value=${v.crv.fTasa} onInput=${v.crv.setTasa} /></div>
+        <div><div class="ap-fl">Tipo</div><div style="display: flex; gap: 6px">${((v.crv.tipos) || []).map((tp, $index) => html`<button class=${"ap-chip " + (tp.cls)} style="flex: 1; padding: 0 !important; text-align: center !important" onClick=${tp.pick}>${tp.label}</button>`)}</div></div>
+        <div><label class="ap-fl" for="crv-plazo">Plazo (meses)</label><input id="crv-plazo" class="ap-in" inputmode="numeric" value=${v.crv.fPlazo} onInput=${v.crv.setPlazo} /></div>
+        <div><label class="ap-fl" for="crv-inicio">Empezó en</label><input id="crv-inicio" class="ap-in" type="month" value=${v.crv.fInicio} onInput=${v.crv.setInicio} /></div>
+      </div>
+      <label class="ap-fl" for="crv-cargos">Seguros y otros cargos al mes</label>
+      <input id="crv-cargos" class="ap-in" inputmode="numeric" placeholder="$ 0" value=${v.crv.fCargos} onInput=${v.crv.setCargos} />
+      <div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">${v.crv.cargosHint}</div>
+      <button class="ap-go" onClick=${v.crv.guardar}>Guardar cambios</button>
+      <button class="ap-alt danger-t" onClick=${v.crv.eliminar}>${v.crv.delTxt}</button>
     </div>
   </div>
 ` : null}

@@ -112,6 +112,12 @@ def rows_click(s):
     res.append(s[pos:])
     return ''.join(res)
 mk = rows_click(mk)
+mk = re.sub(r'(<sc-for list="\{\{credits\}\}" as="k"[^>]*>\s*<div)', r'\1 onClick="{{k.open}}" tabindex="0" role="button"', mk)
+_cp = '      <div class="cr-prev">'
+assert mk.count(_cp) == 1
+mk = mk.replace(_cp, '      <label class="ap-fl" for="cr-cargos">Seguros y otros cargos al mes (opcional)</label>\n      <input id="cr-cargos" class="ap-in" inputmode="numeric" placeholder="$ 0" value="{{cfCargos}}" onChange="{{cfSetCargos}}">\n      <div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">{{cfBaseTxt}}</div>\n' + _cp)
+assert 'cuota mensual</span>' in mk
+mk = mk.replace('cuota mensual</span>', '{{cfCuotaLbl}}</span>', 1)
 
 # ---------- 4. botones de "nuevo cerdito" -> formulario
 def in_blocks(s, opener, fn):

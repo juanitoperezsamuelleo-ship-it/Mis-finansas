@@ -1,0 +1,35 @@
+const { chromium } = require('/home/claude/.npm-global/lib/node_modules/playwright');
+const OUT='/tmp/claude-0/-home-claude-mis-finansas/d01549d2-9f8a-527e-840b-1b466d08a66f/scratchpad/s2/';
+require('fs').mkdirSync(OUT,{recursive:true});
+(async()=>{
+  const b=await chromium.launch(); const errs=[];
+  const ctx=await b.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const p=await ctx.newPage(); p.on('pageerror',e=>errs.push('pageerror: '+e.message)); p.on('console',m=>{if(m.type()==='error')errs.push('console: '+m.text().slice(0,200))});
+  let n=0; const shot=async(nm)=>p.screenshot({path:OUT+String(++n).padStart(2,'0')+'-'+nm+'.png'});
+  const click=async(re)=>{const dlg=(await p.$$('[role=dialog]')).length>0 && !(await p.$('.sheet'));const sel=dlg?'[role=dialog] button, [role=dialog] label':'button, [role=button], label';for(const x of await p.$$(sel)){if(!(await x.isVisible()))continue;const t=(await x.innerText()).trim();const a=await x.getAttribute('aria-label');if(re.test(t)||(a&&re.test(a))){await x.click();await p.waitForTimeout(500);return true}}errs.push('no encontré '+re);return false};
+  await p.goto('http://localhost:8766/'); await p.waitForTimeout(4300);
+  await p.fill('#ed-nombre','Patrick'); await p.fill('#ed-ingresoQuincena','2450000'); await click(/^Continuar$/);
+  await shot('seguridad-bienvenida');
+  await p.fill('#ed-pin','123456'); await p.fill('#ed-pin2','123456'); await click(/^Activar bloqueo$/); await shot('pin-facil');
+  await p.fill('#ed-pin','482915'); await p.fill('#ed-pin2','482915'); await click(/^Activar bloqueo$/); await p.waitForTimeout(1500); await shot('pin-ok');
+  await click(/^Continuar$/); await shot('nube');
+  await click(/Usar sin nube/); await p.waitForTimeout(600); await click(/Cerrar/); await p.waitForTimeout(400);
+  // ingresos
+  await click(/Cambiar apariencia/); await click(/^Ingresos por quincena/); await shot('ingresos');
+  await p.fill('#ed-salario','2450000'); await p.fill('#ed-extra','230000'); await click(/^Guardar quincena$/); await shot('ingresos-guardado');
+  await click(/^Cerrar$/);
+  await click(/Agregar gasto/); await click(/^Ingreso$/); await p.fill('#nb-monto','120000'); await p.fill('#nb-nota','Venta bicicleta'); await shot('mas-ingreso'); await click(/^Otros$/); await click(/^Guardar$/);
+  await p.waitForTimeout(1300); await shot('inicio');
+  const raw=await p.evaluate(()=>({plain:localStorage.getItem('mf-data-v1'),lock:(localStorage.getItem('mf-lock-v1')||'').slice(0,120)}));
+  console.log('plaintext guardado?', raw.plain, '| lock:', raw.lock);
+  await p.reload(); await p.waitForTimeout(1000); await shot('bloqueo');
+  for(const d of '111111'){ await p.click(`[aria-label="Número ${d}"]`); } await p.waitForTimeout(2500); await shot('pin-mal');
+  for(const d of '482915'){ await p.click(`[aria-label="Número ${d}"]`); } await p.waitForTimeout(3000); await shot('desbloqueado');
+  await p.waitForTimeout(2500); await shot('inicio-2');
+  const txt=await p.evaluate(()=>document.body.innerText.match(/Ingreso[^\n]*\n?[^\n]*/g));
+  console.log(txt && txt.slice(0,3));
+  await click(/Cambiar apariencia/); await click(/^Nube y copia/); await shot('nube-login');
+  await click(/^Crear usuario$/); await p.fill('#cl-user','patrick'); await p.fill('#cl-password','abc'); await shot('password-debil');
+  await p.fill('#cl-password','Finanzas#2026!Seguro'); await p.fill('#cl-password2','Finanzas#2026!Seguro'); await shot('password-fuerte');
+  console.log(errs.join('\n')||'sin errores'); await b.close();
+})();

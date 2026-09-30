@@ -151,3 +151,72 @@
     </div>
   </div>
 </sc-if>
+
+<sc-if value="{{crOn}}" hint-placeholder-val="{{false}}">
+  <div class="ap-scrim" onClick="{{crv.close}}"></div>
+  <div class="ap tall" role="dialog" aria-label="Crédito {{crv.name}}">
+    <div style="width: 40px; height: 5px; border-radius: 9px; background: var(--apline); margin: 0 auto 12px; flex-shrink: 0"></div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-shrink: 0">
+      <div style="min-width: 0"><div style="font-family: 'Sora', sans-serif; font-size: 21px; font-weight: 600">{{crv.name}}</div><div style="font-size: 13px; color: var(--apmut); margin-top: 3px">{{crv.sub}}</div></div>
+      <button onClick="{{crv.close}}" aria-label="Cerrar" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: var(--apcard); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="as-scroll">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px"><span style="font-family: 'Sora', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -.5px">{{crv.saldo}}</span><span style="font-size: 13px; color: var(--apmut)">{{crv.pctTxt}}</span></div>
+      <div style="font-size: 12.5px; color: var(--apmut)">saldo de hoy</div>
+      <div class="pw-meter" style="height: 12px"><span style="width: {{crv.pct}}%; background: #3cc59a"></span></div>
+      <div class="cr-grid">
+        <div><span>Cuota mensual</span><b>{{crv.cuota}}</b><i>{{crv.cuotaDet}}</i></div>
+        <div><span>Terminas en</span><b>{{crv.endTxt}}</b><i>{{crv.kTxt}} cuotas</i></div>
+        <div style="grid-column: 1 / -1"><span>Intereses que te faltan por pagar</span><b>{{crv.restInt}}</b></div>
+      </div>
+      <sc-if value="{{crv.hasAhorro}}" hint-placeholder-val="{{false}}"><div class="ap-ok">{{crv.ahorroTxt}}</div></sc-if>
+
+      <sc-if value="{{crv.pagado}}" hint-placeholder-val="{{false}}"><div class="ap-ok">¡Este crédito ya está pagado! 🎉</div></sc-if>
+      <div class="ap-lbl">Abono extra a capital</div>
+      <label class="ap-fl" for="crv-monto" style="margin-top: 0">¿Cuánto vas a abonar?</label>
+      <input id="crv-monto" class="ap-in" inputmode="numeric" placeholder="$ 0" value="{{crv.monto}}" onChange="{{crv.setMonto}}" style="font-size: 22px; height: 56px">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px"><sc-for list="{{crv.quick}}" as="qq" hint-placeholder-count="4"><button class="ap-chip" onClick="{{qq.pick}}">{{qq.label}}</button></sc-for></div>
+      <div class="ap-fl">¿Qué quieres que haga el banco?</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <sc-for list="{{crv.modos}}" as="mo" hint-placeholder-count="2"><button class="cr-mode {{mo.cls}}" onClick="{{mo.pick}}"><b>{{mo.label}}</b><span>{{mo.desc}}</span></button></sc-for>
+      </div>
+      <label class="ap-fl" for="crv-fecha">Fecha del abono</label>
+      <input id="crv-fecha" class="ap-in" type="date" value="{{crv.fecha}}" onChange="{{crv.setFecha}}">
+      <button class="ap-chip {{crv.gastoCls}}" style="margin-top: 10px; width: 100%" onClick="{{crv.toggleGasto}}">{{crv.gastoTxt}}</button>
+      <sc-if value="{{crv.hasPrev}}" hint-placeholder-val="{{false}}"><div class="ed-note" style="margin-top: 10px">{{crv.prevTxt}}</div></sc-if>
+      <sc-if value="{{crv.hasErr}}" hint-placeholder-val="{{false}}"><div class="ap-err">{{crv.err}}</div></sc-if>
+      <sc-if value="{{crv.hasOk}}" hint-placeholder-val="{{false}}"><div class="ap-ok">{{crv.ok}}</div></sc-if>
+      <button class="ap-go" onClick="{{crv.abonar}}">Abonar a capital</button>
+      <button class="ap-alt" onClick="{{crv.pagarCuota}}">{{crv.cuotaBtn}}</button>
+
+      <div class="ap-lbl">Abonos hechos</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <sc-for list="{{crv.abonos}}" as="ca" hint-placeholder-count="2">
+          <div class="ed-item">
+            <span style="width: 10px; height: 36px; border-radius: 6px; flex-shrink: 0; background: #3cc59a"></span>
+            <div style="flex: 1; min-width: 0"><div style="font-weight: 800; font-size: 14.5px">{{ca.vTxt}}</div><div style="font-size: 12px; color: var(--apmut); margin-top: 2px">{{ca.sub}}</div></div>
+            <button class="ed-btn {{ca.delCls}}" onClick="{{ca.del}}" aria-label="Eliminar abono">{{ca.delTxt}}</button>
+          </div>
+        </sc-for>
+      </div>
+      <sc-if value="{{crv.noAbonos}}" hint-placeholder-val="{{false}}"><div style="font-size: 13px; color: var(--apmut); padding: 4px 2px">Aún no has hecho abonos extra.</div></sc-if>
+
+      <div class="ap-lbl">Datos del crédito</div>
+      <label class="ap-fl" for="crv-name" style="margin-top: 0">Nombre</label>
+      <input id="crv-name" class="ap-in" value="{{crv.fName}}" onChange="{{crv.setName}}">
+      <label class="ap-fl" for="crv-cmonto">Monto prestado</label>
+      <input id="crv-cmonto" class="ap-in" inputmode="numeric" value="{{crv.fMonto}}" onChange="{{crv.setCMonto}}">
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div><label class="ap-fl" for="crv-tasa">Tasa %</label><input id="crv-tasa" class="ap-in" inputmode="decimal" value="{{crv.fTasa}}" onChange="{{crv.setTasa}}"></div>
+        <div><div class="ap-fl">Tipo</div><div style="display: flex; gap: 6px"><sc-for list="{{crv.tipos}}" as="tp" hint-placeholder-count="2"><button class="ap-chip {{tp.cls}}" style="flex: 1; padding: 0 !important; text-align: center !important" onClick="{{tp.pick}}">{{tp.label}}</button></sc-for></div></div>
+        <div><label class="ap-fl" for="crv-plazo">Plazo (meses)</label><input id="crv-plazo" class="ap-in" inputmode="numeric" value="{{crv.fPlazo}}" onChange="{{crv.setPlazo}}"></div>
+        <div><label class="ap-fl" for="crv-inicio">Empezó en</label><input id="crv-inicio" class="ap-in" type="month" value="{{crv.fInicio}}" onChange="{{crv.setInicio}}"></div>
+      </div>
+      <label class="ap-fl" for="crv-cargos">Seguros y otros cargos al mes</label>
+      <input id="crv-cargos" class="ap-in" inputmode="numeric" placeholder="$ 0" value="{{crv.fCargos}}" onChange="{{crv.setCargos}}">
+      <div style="font-size: 12px; color: var(--apmut); margin-top: 6px; line-height: 1.4">{{crv.cargosHint}}</div>
+      <button class="ap-go" onClick="{{crv.guardar}}">Guardar cambios</button>
+      <button class="ap-alt danger-t" onClick="{{crv.eliminar}}">{{crv.delTxt}}</button>
+    </div>
+  </div>
+</sc-if>
