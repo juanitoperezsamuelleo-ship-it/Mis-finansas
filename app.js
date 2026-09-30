@@ -744,7 +744,14 @@ class App extends Component {
     if (!home || home.uid !== this.session.user.id) home = await this.resolveHome();
     const { data: row, error } = await this.sb.from('finanzas').select('data, updated_at').eq('user_id', home.id).maybeSingle();
     if (error) return this.setSync({ status: 'err', msg: this.errTxt(error) });
-    const local = this.state.data;
+    let local = this.state.data, prevOwner = null;
+    try { prevOwner = localStorage.getItem('mf-owner'); } catch (e) {}
+    if (prevOwner && prevOwner !== home.id) {
+      // los datos de este teléfono son de otra cuenta: no mezclarlos, cargar los de esta cuenta
+      const d = blank(); d.prefs = local.prefs; d.onboarded = true; local = d;
+      this.persist(d); this.setState({ data: d });
+    }
+    try { localStorage.setItem('mf-owner', home.id); } catch (e) {}
     const remote = row ? normalize(row.data) : null;
     const merged = remote ? mergeDocs(local, remote) : local;
     merged.prefs = local.prefs;
