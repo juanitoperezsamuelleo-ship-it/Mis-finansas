@@ -1088,7 +1088,7 @@ class App extends Component {
     const mvCuotaTxt = mvC > 1 && mvM > 0 ? mvC + ' cuotas de ' + f(Math.round(mvM / mvC)) + ' al mes' : 'Se cobra completa en el próximo extracto';
     const looks = LOOKS.map((L) => { const t = L[mode]; return { name: L.name, desc: L.desc, font: L.font, weight: L.weight, fstyle: L.fstyle, rad: L.rad, bg: t.bg, fg: t.fg, edge: t.edge, a0: t.a[0], a1: t.a[1], a2: t.a[2], on: lk === L.id, cls: lk === L.id ? 'on' : '', pick: () => this.pickLook(L.id) }; });
     const thIdx = { light: 0, dark: 1, auto: 2 }[D.prefs.theme] || 0;
-    const nombre = D.perfil.nombre || 'hola';
+    const nombre = (this.shared() && this.myName()) || D.perfil.nombre || 'hola';
     const cfM = num(s.mv.monto);
     return {
       appCls: 'app ' + mode, themeCls: mode,
